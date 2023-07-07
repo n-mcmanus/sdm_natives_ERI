@@ -1,0 +1,46 @@
+---
+title: "Filter species occurrence data"
+author: "Nick McManus"
+date: "2023-07-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(janitor)
+library(here)
+```
+
+## R Markdown
+
+
+This script is for reading in and filtering species occurrence data downloaded from GBIF (GBIF.org (07 July 2023) GBIF Occurrence Download https://doi.org/10.15468/dl.xsu77g)
+
+
+Do we also want to remove data with no dates?
+
+```{r}
+### Fxn to read in and clean information from CSV
+sp_filter <- function(filename) {
+  ## read in data
+  raw <- read_csv(here(paste0("data/species_occurrence_GBIF/raw/", filename))) %>% 
+    janitor::clean_names()
+  
+  ## filter data
+  filtered <- raw %>% 
+    ## only keep obs in CA
+    filter(state_province == "California") %>% 
+    ## remove data with no coords
+    drop_na(decimal_latitude, decimal_longitude) %>% 
+    ## remove points with incorrect coords
+    filter(!str_detect(issue, "COUNTRY_COORDINATE_MISMATCH"))
+  
+  return(filtered)
+}
+
+### test with a. poly
+a_polycarpa <- sp_filter("A_polycarpa.csv")
+
+```
+
