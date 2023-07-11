@@ -8,17 +8,75 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
-library(janitor)
-library(here)
+library(rgbif)
 ```
 
 ## R Markdown
 
+This script uses the `rgbif` package to directly download species occurence data from GBIF. To use the `occ_download()` function, this requires setting your GBIF login details. Details on how to set this can be found at: https://docs.ropensci.org/rgbif/articles/gbif_credentials.html
 
-This script is for reading in and filtering species occurrence data downloaded from GBIF (GBIF.org (07 July 2023) GBIF Occurrence Download https://doi.org/10.15468/dl.xsu77g)
+```{r}
+### Create list of species names
+name_list <- c(
+  ## shrubs
+  "Atriplex polycarpa",
+  "Peritoma arborea",
+  ## forbs
+  "Centromadia pungens",
+  "Layia pentachaeta subsp. albida D.D.Keck", 
+  "Phacelia ciliata Benth.",
+  ## spp that naturally colonized
+  "Amsinckia menziesii (Lehm.) A.Nelson & J.F.Macbr.",
+  "Caulanthus lasiophyllus (Hook. & Arn.) Payson"
+)
+
+### Check if they worked
+# name_backbone_checklist(name_list)
+
+### Pull taxon keys from list
+taxon_keys <- name_backbone_checklist(name_list) %>% 
+  pull(usageKey)
+```
+
+Start with A. polycarpa
+```{r}
+### download filtered data for A. polycarpa
+a_poly <- occ_download(pred_in("taxonKey", taxon_keys[1]),
+                       ## remove geospatial issues
+                       pred("hasGeospatialIssue", FALSE),
+                       ## ensure coords
+                       pred("hasCoordinate", TRUE),
+                       ## uncertainty less than 5000m
+                       #pred_lt("coordinateUncertaintyInMeters",5000),
+                       pred("occurrenceStatus", "PRESENT"),
+                       ## within US
+                       pred("country", "US"),
+                       ## within CA
+                       pred("stateProvince", "California"),
+                       ## output as CSV
+                       format = "SIMPLE_CSV")
+
+### check on download status
+occ_download_wait(a_poly)
+
+### import download as df in R
+a_poly <- occ_download_get(a_poly) %>%
+  occ_download_import()
+```
 
 
-Do we also want to remove data with no dates?
+
+
+
+
+
+
+
+
+
+
+
+Older version of cleaning data when manually downloading/reading in:
 
 ```{r}
 ### Fxn to read in and clean information from CSV
@@ -42,5 +100,7 @@ sp_filter <- function(filename) {
 ### test with a. poly
 a_polycarpa <- sp_filter("A_polycarpa.csv")
 
+
+blah <- read_csv(here("data/species_occurrence_GBIF/raw/A_polycarpa.csv"))
 ```
 
