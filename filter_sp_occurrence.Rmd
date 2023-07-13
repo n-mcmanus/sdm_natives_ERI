@@ -7,8 +7,10 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(tidyverse)
-library(rgbif)
+library(tidyverse)            ## always
+library(here)                 ## reading/writing data
+library(rgbif)                ## download GBIF data
+library(CoordinateCleaner)    ## filter/clean GBIF data
 ```
 
 ## R Markdown
@@ -41,27 +43,38 @@ taxon_keys <- name_backbone_checklist(name_list) %>%
 Start with A. polycarpa
 ```{r}
 ### download filtered data for A. polycarpa
-a_poly <- occ_download(pred_in("taxonKey", taxon_keys[1]),
+gbif_download <- occ_download(pred_in("taxonKey", taxon_keys[1]),
                        ## remove geospatial issues
                        pred("hasGeospatialIssue", FALSE),
                        ## ensure coords
                        pred("hasCoordinate", TRUE),
-                       ## uncertainty less than 5000m
-                       #pred_lt("coordinateUncertaintyInMeters",5000),
+                       ## remove "absent" occurences
                        pred("occurrenceStatus", "PRESENT"),
                        ## within US
                        pred("country", "US"),
                        ## within CA
                        pred("stateProvince", "California"),
+                       ## uncertainty less than 5000m
+                       #pred_lt("coordinateUncertaintyInMeters",5000),
                        ## output as CSV
                        format = "SIMPLE_CSV")
 
 ### check on download status
-occ_download_wait(a_poly)
+occ_download_wait(gbif_download)
 
-### import download as df in R
-a_poly <- occ_download_get(a_poly) %>%
-  occ_download_import()
+### import GBIF data into env and filter using CoordinateCleaner pkg
+a_poly <- occ_download_get(gbif_download) %>%
+  occ_download_import() %>% 
+  ## set lowercase column names to work with CC
+  setNames(tolower(names(.))) %>% 
+  ## filter out duplicate points
+  distinct(decimallongitude, decimallatitude, specieskey, datasetkey, .keep_all = TRUE)
+```
+
+Eventually the SDM will be done with Dismo, but for now I'm starting with Wallace. Although GBIF datasets can be directly queried in the Wallace interface, you cannot customize the data filters as easily as using `rgbif` and `CoordinateCleaner`. As such, we'll have some temporary code that exports occurrence data locally that can be uploaded to Wallace interface.
+
+```{r}
+write_csv(a_poly, here("data/species_occurrence_GBIF/a_polycarpa.csv"))
 ```
 
 
