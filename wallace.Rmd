@@ -1,0 +1,19 @@
+---
+title: "wallace"
+author: "Nick McManus"
+date: "2023-07-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(wallace)
+```
+
+
+Markdown used to run Wallace GUI for Maxent
+
+```{r}
+run_wallace()
+```
+
