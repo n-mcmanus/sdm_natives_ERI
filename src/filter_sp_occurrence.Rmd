@@ -11,6 +11,7 @@ library(tidyverse)            ## always
 library(here)                 ## reading/writing data
 library(rgbif)                ## download GBIF data
 library(CoordinateCleaner)    ## filter/clean GBIF data
+library(terra)
 ```
 
 ## R Markdown
@@ -43,7 +44,7 @@ taxon_keys <- name_backbone_checklist(name_list) %>%
 Start with A. polycarpa
 ```{r}
 ### download filtered data for A. polycarpa
-gbif_download <- occ_download(pred_in("taxonKey", taxon_keys[1]),
+gbif_download <- occ_download(pred_in("taxonKey", taxon_keys[2]),
                        ## remove geospatial issues
                        pred("hasGeospatialIssue", FALSE),
                        ## ensure coords
@@ -63,13 +64,125 @@ gbif_download <- occ_download(pred_in("taxonKey", taxon_keys[1]),
 occ_download_wait(gbif_download)
 
 ### import GBIF data into env and filter using CoordinateCleaner pkg
-a_poly <- occ_download_get(gbif_download) %>%
+p_arborea <- occ_download_get(gbif_download) %>%
   occ_download_import() %>% 
   ## set lowercase column names to work with CC
   setNames(tolower(names(.))) %>% 
   ## filter out duplicate points
   distinct(decimallongitude, decimallatitude, specieskey, datasetkey, .keep_all = TRUE)
 ```
+
+Pull in CalFlora data for A. polycarpa, merge with GBIF data, and determine how many duplicates there are
+```{r}
+apoly_calf <- read_csv("data/a_polycarpa_calflora.csv") %>% 
+  janitor::clean_names()
+
+## subset of calflora data
+apoly_calf_sub <- apoly_calf %>% 
+  dplyr::select(c(latitude, longitude, date)) %>% 
+  #mutate(source = "calflora") %>% 
+  mutate(latitude = round(latitude, 4))
+
+## subset of gbif data
+apoly_gbif_sub <- a_poly %>% 
+  dplyr::select(c(decimallatitude, decimallongitude, eventdate)) %>% 
+  rename(latitude = decimallatitude, 
+         longitude = decimallongitude,  
+         date = eventdate) %>% 
+  #mutate(source = "gbif") %>% 
+  mutate(latitude = round(latitude, 4))
+
+apoly_gbif_sub$id <- as.character(apoly_gbif_sub$id)
+apoly_gbif_sub$date <- as.Date(apoly_gbif_sub$date)
+
+
+test <- inner_join(apoly_calf_sub, apoly_gbif_sub)
+
+## When rounded to 4 (10m), only two points match. These are both iNaturalist entiries
+## that came in both databases
+
+apoly_gbif2 <- apoly_gbif_sub %>% 
+  mutate(latitude = round(latitude, 2),
+         longitude = round(longitude, 2))
+
+apoly_calf2 <- apoly_calf_sub %>% 
+  mutate(latitude = round(latitude, 2),
+         longitude = round(longitude, 2))
+
+test2 <- inner_join(apoly_gbif2, apoly_calf2)
+
+## only 5 matching
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## merge
+apoly_merge <- rbind(apoly_calf_sub, apoly_gbif_sub)
+
+## round lat
+apoly_merge_sub <- apoly_merge %>% 
+  mutate(latitude = round(latitude, 4)) %>% 
+  group_by(date)
+
+
+```
+```{r}
+parb_calf <- read_csv(here("data/p_arborea_calflora.csv")) %>% 
+  janitor::clean_names()
+
+## subset of calflora data
+parb_calf_sub <- parb_calf %>% 
+  dplyr::select(c(latitude, longitude, date)) %>% 
+  #mutate(source = "calflora") %>% 
+  mutate(latitude = round(latitude, 4))
+
+## subset of gbif data
+parb_gbif_sub <- p_arborea %>% 
+  dplyr::select(c(decimallatitude, decimallongitude, eventdate)) %>% 
+  rename(latitude = decimallatitude, 
+         longitude = decimallongitude,  
+         date = eventdate) %>% 
+  #mutate(source = "gbif") %>% 
+  mutate(latitude = round(latitude, 4))
+
+parb_gbif_sub$id <- as.character(apoly_gbif_sub$id)
+parb_gbif_sub$date <- as.Date(parb_gbif_sub$date)
+
+
+test <- inner_join(parb_calf_sub, parb_gbif_sub)
+
+## When rounded to 4 (10m), only two points match. These are both iNaturalist entiries
+## that came in both databases
+
+parb_gbif2 <- parb_gbif_sub %>% 
+  mutate(latitude = round(latitude, 2),
+         longitude = round(longitude, 2))
+
+parb_calf2 <- parb_calf_sub %>% 
+  mutate(latitude = round(latitude, 2),
+         longitude = round(longitude, 2))
+
+test2 <- inner_join(parb_gbif2, parb_calf2)
+
+## only 5 matching
+```
+
+
+
+
+
+
+
 
 Eventually the SDM will be done with Dismo, but for now I'm starting with Wallace. Although GBIF datasets can be directly queried in the Wallace interface, you cannot customize the data filters as easily as using `rgbif` and `CoordinateCleaner`. As such, we'll have some temporary code that exports occurrence data locally that can be uploaded to Wallace interface.
 
@@ -115,5 +228,27 @@ a_polycarpa <- sp_filter("A_polycarpa.csv")
 
 
 blah <- read_csv(here("data/species_occurrence_GBIF/raw/A_polycarpa.csv"))
+```
+
+
+
+
+
+Convert folder of ASCII files to rasters. ASCII files have associated coordinates but usually not explicitly defined CRS when read in as a raster. Use this code to convert an entire file of .asc files to .tif files with appropriate CRS. BCM data uses NAD83 CA Albers (EPSG:3310)
+```{r}
+### Assign file path to global variable (selecting all .asc files)
+fasc <- list.files(path = "data/" , pattern='\\.asc$', full=TRUE)
+ftif <- gsub("\\.asc$", ".tif", fasc)
+
+### Loop to read in .asc, add crs, then output .tif
+for (i in 1:length(fasc)) {
+    r <- rast(fasc[i])
+    crs(r) <- "epsg: 3310"
+    writeRaster(r, ftif[i])
+}
+
+## Test the new file
+aet <- rast("data/aet.tif")
+
 ```
 

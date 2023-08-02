@@ -1,0 +1,2742 @@
+---
+title: "Tickmodelling Scripts with Variable Land USe"
+author: "Sofie McComb"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Libraries
+
+```{r}
+
+options(java.parameters = "-Xmx8g")#Perhaps change to 32 before running ENMeval
+library(dismo)
+#library(ENMeval)
+library(rJava)
+library(tidyverse) 
+dismo::maxent()
+
+```
+
+
+##Extraction
+To build the Seasonal Model we needed to use Maxent Samples with Data (SWD) function.  This method allows us to extract environmental variables that correspond with specific date of occurance.  For example:  a tick observation #1 at Location A found in December will have the December environmental variables (December's ppt, for example), while tick observation #2, also found at Location B but in the month of June will have very different environmental variables (probably much less ppt compared to December) without Samples with Data we would be unable to preform this analysis.
+
+To get the data for SWD we need to extract the environmental variables from our rasters.
+
+##Extraction 1:  Annual Extraction
+
+
+```{r}
+AnnEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/aet_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/cwd_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/ppt_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmx_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+AnnOcc <- read.csv("Data/CollectionData/Ipac_pres_NAD83_annual.csv")
+AnnOcc <- AnnOcc %>%
+  select(longitude, latitude)
+
+AnnExtract <- raster::extract(AnnEnv, AnnOcc, method='simple')
+AnnExtract <- as.data.frame(AnnExtract)
+
+AnnExtract$longitude <- AnnOcc$longitude
+AnnExtract$latitude <- AnnOcc$latitude
+
+write.csv(AnnExtract, file = "Data/SWD/NLCD/AnnOCCswda.csv")
+
+
+
+```
+
+
+##Extraction 2:  Annual:  Background Extraction
+
+```{r}
+
+AnnBack <- read.csv("Data/Background/Annual_Background_MaxentSWD.csv")
+AnnBack <- AnnBack %>%
+  select(longitude, latitude)
+
+AnnBackExtract <- raster::extract(AnnEnv, AnnBack, method='simple')
+AnnBackExtract <- as.data.frame(AnnBackExtract)
+
+AnnBackExtract$longitude <- AnnBack$longitude
+AnnBackExtract$latitude <- AnnBack$latitude
+
+write.csv(AnnBackExtract, file = "Data/SWD/NLCD/AnnBackswd.csv")
+
+```
+
+
+##Extraction 3:  Seasonal:  Occurance Extraction
+
+```{r}
+
+#January
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetjan_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdjan_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptjan_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxjan_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+MonthOcc <- read.csv("Data/CollectionData/Jan_Samples_MaxentSWD.csv")
+MonthOcc <- MonthOcc %>% 
+  select(longitude, latitude)
+
+MonthExtract <- raster::extract(MonthEnv, MonthOcc, method='simple')
+MonthExtract <- as.data.frame(MonthExtract)
+
+MonthExtract$longitude <- MonthOcc$longitude
+MonthExtract$latitude <- MonthOcc$latitude
+
+write.csv(MonthExtract, file = "Data/SWD/NLCD/JanuaryOCC.csv")
+
+##February
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetfeb_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdfeb_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptfeb_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxfeb_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+MonthOcc <- read.csv("Data/CollectionData/Feb_Samples_MaxentSWD.csv")
+MonthOcc <- MonthOcc %>% 
+  select(longitude, latitude)
+
+MonthExtract <- raster::extract(MonthEnv, MonthOcc, method='simple')
+MonthExtract <- as.data.frame(MonthExtract)
+
+MonthExtract$longitude <- MonthOcc$longitude
+MonthExtract$latitude <- MonthOcc$latitude
+
+write.csv(MonthExtract, file = "Data/SWD/NLCD/FebruaryOCC.csv")
+
+##March
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetmar_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdmar_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptmar_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxmar_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+MonthOcc <- read.csv("Data/CollectionData/Mar_Samples_MaxentSWD.csv")
+MonthOcc <- MonthOcc %>% 
+  select(longitude, latitude)
+
+MonthExtract <- raster::extract(MonthEnv, MonthOcc, method='simple')
+MonthExtract <- as.data.frame(MonthExtract)
+
+MonthExtract$longitude <- MonthOcc$longitude
+MonthExtract$latitude <- MonthOcc$latitude
+
+write.csv(MonthExtract, file = "Data/SWD/NLCD/MarchOCC.csv")
+
+
+##April
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetapr_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdapr_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptapr_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxapr_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+MonthOcc <- read.csv("Data/CollectionData/Apr_Samples_MaxentSWD.csv")
+MonthOcc <- MonthOcc %>% 
+  select(longitude, latitude)
+
+MonthExtract <- raster::extract(MonthEnv, MonthOcc, method='simple')
+MonthExtract <- as.data.frame(MonthExtract)
+
+MonthExtract$longitude <- MonthOcc$longitude
+MonthExtract$latitude <- MonthOcc$latitude
+
+write.csv(MonthExtract, file = "Data/SWD/NLCD/AprilOCC.csv")
+
+##May
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetmay_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdmay_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptmay_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxmay_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+MonthOcc <- read.csv("Data/CollectionData/May_Samples_MaxentSWD.csv")
+MonthOcc <- MonthOcc %>% 
+  select(longitude, latitude)
+
+MonthExtract <- raster::extract(MonthEnv, MonthOcc, method='simple')
+MonthExtract <- as.data.frame(MonthExtract)
+
+MonthExtract$longitude <- MonthOcc$longitude
+MonthExtract$latitude <- MonthOcc$latitude
+
+write.csv(MonthExtract, file = "Data/SWD/NLCD/MayOCC.csv")
+
+
+##June
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetjun_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdjun_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptjun_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxjun_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+MonthOcc <- read.csv("Data/CollectionData/Jun_Samples_MaxentSWD.csv")
+MonthOcc <- MonthOcc %>% 
+  select(longitude, latitude)
+
+MonthExtract <- raster::extract(MonthEnv, MonthOcc, method='simple')
+MonthExtract <- as.data.frame(MonthExtract)
+
+MonthExtract$longitude <- MonthOcc$longitude
+MonthExtract$latitude <- MonthOcc$latitude
+
+write.csv(MonthExtract, file = "Data/SWD/NLCD/JuneOCC.csv")
+
+
+##July
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetjul_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdjul_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptjul_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxjul_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+MonthOcc <- read.csv("Data/CollectionData/Jul_Samples_MaxentSWD.csv")
+MonthOcc <- MonthOcc %>% 
+  select(longitude, latitude)
+
+MonthExtract <- raster::extract(MonthEnv, MonthOcc, method='simple')
+MonthExtract <- as.data.frame(MonthExtract)
+
+MonthExtract$longitude <- MonthOcc$longitude
+MonthExtract$latitude <- MonthOcc$latitude
+
+write.csv(MonthExtract, file = "Data/SWD/NLCD/JulyOCC.csv")
+
+##August
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetaug_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdaug_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptaug_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxaug_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+MonthOcc <- read.csv("Data/CollectionData/Aug_Samples_MaxentSWD.csv")
+MonthOcc <- MonthOcc %>% 
+  select(longitude, latitude)
+
+MonthExtract <- raster::extract(MonthEnv, MonthOcc, method='simple')
+MonthExtract <- as.data.frame(MonthExtract)
+
+MonthExtract$longitude <- MonthOcc$longitude
+MonthExtract$latitude <- MonthOcc$latitude
+
+write.csv(MonthExtract, file = "Data/SWD/NLCD/AugustOCC.csv")
+
+
+##September
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetsep_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdsep_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptsep_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxsep_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+MonthOcc <- read.csv("Data/CollectionData/Sep_Samples_MaxentSWD.csv")
+MonthOcc <- MonthOcc %>% 
+  select(longitude, latitude)
+
+MonthExtract <- raster::extract(MonthEnv, MonthOcc, method='simple')
+MonthExtract <- as.data.frame(MonthExtract)
+
+MonthExtract$longitude <- MonthOcc$longitude
+MonthExtract$latitude <- MonthOcc$latitude
+
+write.csv(MonthExtract, file = "Data/SWD/NLCD/SeptemberOCC.csv")
+
+
+##October
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetoct_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdoct_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptoct_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxoct_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+MonthOcc <- read.csv("Data/CollectionData/Oct_Samples_MaxentSWD.csv")
+MonthOcc <- MonthOcc %>% 
+  select(longitude, latitude)
+
+MonthExtract <- raster::extract(MonthEnv, MonthOcc, method='simple')
+MonthExtract <- as.data.frame(MonthExtract)
+
+MonthExtract$longitude <- MonthOcc$longitude
+MonthExtract$latitude <- MonthOcc$latitude
+
+write.csv(MonthExtract, file = "Data/SWD/NLCD/OctoberOCC.csv")
+
+
+##November
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetnov_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdnov_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptnov_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxnov_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+MonthOcc <- read.csv("Data/CollectionData/Nov_Samples_MaxentSWD.csv")
+MonthOcc <- MonthOcc %>% 
+  select(longitude, latitude)
+
+MonthExtract <- raster::extract(MonthEnv, MonthOcc, method='simple')
+MonthExtract <- as.data.frame(MonthExtract)
+
+MonthExtract$longitude <- MonthOcc$longitude
+MonthExtract$latitude <- MonthOcc$latitude
+
+write.csv(MonthExtract, file = "Data/SWD/NLCD/NovemberOCC.csv")
+
+
+##December
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetdec_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwddec_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptdec_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxdec_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+MonthOcc <- read.csv("Data/CollectionData/Dec_Samples_MaxentSWD.csv")
+MonthOcc <- MonthOcc %>% 
+  select(longitude, latitude)
+
+MonthExtract <- raster::extract(MonthEnv, MonthOcc, method='simple')
+MonthExtract <- as.data.frame(MonthExtract)
+
+MonthExtract$longitude <- MonthOcc$longitude
+MonthExtract$latitude <- MonthOcc$latitude
+
+write.csv(MonthExtract, file = "Data/SWD/NLCD/DecemberOCC.csv")
+```
+
+##Extraction 4:  Seasonal:  Background Extraction
+
+```{r}
+#January
+
+MonthBack <- read.csv("Data/Background/Random_Background_Locations.csv")
+MonthBack <- MonthBack %>%
+  subset(Month=="January") %>% 
+  select(longitude, latitude)
+
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetjan_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdjan_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptjan_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxjan_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+Month01Extract <- raster::extract(MonthEnv, MonthBack, method='simple')
+Month01Extract <- as.data.frame(Month01Extract)
+
+Month01Extract$longitude <- MonthBack$longitude
+Month01Extract$latitude <- MonthBack$latitude
+
+
+#February
+
+MonthBack <- read.csv("Data/Background/Random_Background_Locations.csv")
+MonthBack <- MonthBack %>%
+  subset(Month=="February") %>% 
+  select(longitude, latitude)
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetfeb_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdfeb_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptfeb_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxfeb_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+
+Month02Extract <- raster::extract(MonthEnv, MonthBack, method='simple')
+Month02Extract <- as.data.frame(Month02Extract)
+
+Month02Extract$longitude <- MonthBack$longitude
+Month02Extract$latitude <- MonthBack$latitude
+
+
+#March
+
+MonthBack <- read.csv("Data/Background/Random_Background_Locations.csv")
+MonthBack <- MonthBack %>%
+  subset(Month=="March") %>% 
+  select(longitude, latitude)
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetmar_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdmar_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptmar_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxmar_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+
+Month03Extract <- raster::extract(MonthEnv, MonthBack, method='simple')
+Month03Extract <- as.data.frame(Month03Extract)
+
+Month03Extract$longitude <- MonthBack$longitude
+Month03Extract$latitude <- MonthBack$latitude
+
+
+#April
+
+MonthBack <- read.csv("Data/Background/Random_Background_Locations.csv")
+MonthBack <- MonthBack %>%
+  subset(Month=="April") %>% 
+  select(longitude, latitude)
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetapr_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdapr_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptapr_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxapr_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+
+Month04Extract <- raster::extract(MonthEnv, MonthBack, method='simple')
+Month04Extract <- as.data.frame(Month04Extract)
+
+Month04Extract$longitude <- MonthBack$longitude
+Month04Extract$latitude <- MonthBack$latitude
+
+
+#May
+
+MonthBack <- read.csv("Data/Background/Random_Background_Locations.csv")
+MonthBack <- MonthBack %>%
+  subset(Month=="May") %>% 
+  select(longitude, latitude)
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetmay_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdmay_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptmay_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxmay_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+
+Month05Extract <- raster::extract(MonthEnv, MonthBack, method='simple')
+Month05Extract <- as.data.frame(Month05Extract)
+
+Month05Extract$longitude <- MonthBack$longitude
+Month05Extract$latitude <- MonthBack$latitude
+
+
+#June
+
+MonthBack <- read.csv("Data/Background/Random_Background_Locations.csv")
+MonthBack <- MonthBack %>%
+  subset(Month=="June") %>% 
+  select(longitude, latitude)
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetjun_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdjun_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptjun_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxjun_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+Month06Extract <- raster::extract(MonthEnv, MonthBack, method='simple')
+Month06Extract <- as.data.frame(Month06Extract)
+
+Month06Extract$longitude <- MonthBack$longitude
+Month06Extract$latitude <- MonthBack$latitude
+
+
+#July
+
+MonthBack <- read.csv("Data/Background/Random_Background_Locations.csv")
+MonthBack <- MonthBack %>%
+  subset(Month=="July") %>% 
+  select(longitude, latitude)
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetjul_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdjul_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptjul_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxjul_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+
+Month07Extract <- raster::extract(MonthEnv, MonthBack, method='simple')
+Month07Extract <- as.data.frame(Month07Extract)
+
+Month07Extract$longitude <- MonthBack$longitude
+Month07Extract$latitude <- MonthBack$latitude
+
+
+#August
+
+MonthBack <- read.csv("Data/Background/Random_Background_Locations.csv")
+MonthBack <- MonthBack %>%
+  subset(Month=="August") %>% 
+  select(longitude, latitude)
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetaug_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdaug_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptaug_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxaug_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+Month08Extract <- raster::extract(MonthEnv, MonthBack, method='simple')
+Month08Extract <- as.data.frame(Month08Extract)
+
+Month08Extract$longitude <- MonthBack$longitude
+Month08Extract$latitude <- MonthBack$latitude
+
+
+
+#September
+
+MonthBack <- read.csv("Data/Background/Random_Background_Locations.csv")
+MonthBack <- MonthBack %>%
+  subset(Month=="September") %>% 
+  select(longitude, latitude)
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetsep_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdsep_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptsep_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxsep_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+Month09Extract <- raster::extract(MonthEnv, MonthBack, method='simple')
+Month09Extract <- as.data.frame(Month09Extract)
+
+Month09Extract$longitude <- MonthBack$longitude
+Month09Extract$latitude <- MonthBack$latitude
+
+
+#October
+
+MonthBack <- read.csv("Data/Background/Random_Background_Locations.csv")
+MonthBack <- MonthBack %>%
+  subset(Month=="October") %>% 
+  select(longitude, latitude)
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetoct_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdoct_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptoct_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxoct_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+
+Month10Extract <- raster::extract(MonthEnv, MonthBack, method='simple')
+Month10Extract <- as.data.frame(Month10Extract)
+
+Month10Extract$longitude <- MonthBack$longitude
+Month10Extract$latitude <- MonthBack$latitude
+
+
+#November
+
+MonthBack <- read.csv("Data/Background/Random_Background_Locations.csv")
+MonthBack <- MonthBack %>%
+  subset(Month=="November") %>% 
+  select(longitude, latitude)
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetnov_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdnov_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptnov_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxnov_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+
+Month11Extract <- raster::extract(MonthEnv, MonthBack, method='simple')
+Month11Extract <- as.data.frame(Month11Extract)
+
+Month11Extract$longitude <- MonthBack$longitude
+Month11Extract$latitude <- MonthBack$latitude
+
+
+#December
+
+MonthBack <- read.csv("Data/Background/Random_Background_Locations.csv")
+MonthBack <- MonthBack %>%
+  subset(Month=="December") %>% 
+  select(longitude, latitude)
+
+MonthEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetdec_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwddec_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptdec_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxdec_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+
+Month12Extract <- raster::extract(MonthEnv, MonthBack, method='simple')
+Month12Extract <- as.data.frame(Month12Extract)
+
+Month12Extract$longitude <- MonthBack$longitude
+Month12Extract$latitude <- MonthBack$latitude
+
+
+##Combining the Monthly Dataframes
+
+colnames(Month01Extract) <-c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+colnames(Month02Extract) <-c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+colnames(Month03Extract) <-c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+colnames(Month04Extract) <-c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+colnames(Month05Extract) <-c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+colnames(Month06Extract) <-c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+colnames(Month07Extract) <-c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+colnames(Month08Extract) <-c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+colnames(Month09Extract) <-c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+colnames(Month10Extract) <-c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+colnames(Month11Extract) <-c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+colnames(Month12Extract) <-c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+
+
+
+BackgroundSWD <- rbind(Month01Extract, Month02Extract, Month03Extract, Month04Extract, Month05Extract, Month06Extract, Month07Extract, Month08Extract, Month09Extract, Month10Extract, Month11Extract, Month12Extract)
+
+write.csv(BackgroundSWD, file = "Data/SWD/NLCD/BackgroundSWD.csv")
+```
+
+
+##Annual Model Construction
+We can next construct a final Annual Model.
+
+##Annual Model 1:  Data Inputs
+
+```{r}
+# Occurance <- read.csv("Data/SWD/NLCD/AnnBackswd.csv")
+# OccAnn <- Occurance %>%
+#   select(longitude, latitude)
+# OccAnn <- OccAnn[!duplicated(OccAnn),]
+# 
+
+envAnnual <- raster::stack("Data/BCM/Current/BCMSnapAnnual90/aet_90m.tif",
+                         "Data/BCM/Current/BCMSnapAnnual90/cwd_90m.tif",
+                         "Data/BCM/Current/BCMSnapAnnual90/ppt_90m.tif",
+                         "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                         "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif",
+                         "Data/BCM/Current/BCMSnapAnnual90/tmx_90m.tif",
+                         "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                         "Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif")
+
+
+AET <- raster("Data/BCM/Current/BCMSnapAnnual90/aet_90m.tif")
+envAnn <- mask(envAnnual, AET)
+#Set anything 0 or 128 as NA (background)
+envAnn$CONUS_Historical_90m[envAnn$CONUS_Historical_90m == 0|
+                              envAnn$CONUS_Historical_90m == 128] <- NA 
+names(envAnn) <- c("aet", "cwd", "ppt", "pptdjf", "tmndjf", "tmx", "tmxjja", "landcover")
+
+
+Pres <- read.csv("Data/SWD/NLCD/AnnOCCswda.csv")
+Pres <- Pres %>% 
+  group_by(longitude) %>% 
+  group_by(latitude) %>% 
+  distinct(longitude, latitude, .keep_all = TRUE) %>% 
+  ungroup()
+
+Presence <- rep(1, nrow(Pres))
+
+colnames(Pres) <- c("x", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+
+Pres$Back <- Presence
+
+Pres1<-Pres %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover, Back)
+
+#Pulling in the Background SWD
+
+Background <- read.csv("Data/SWD/AnnBackswd.csv")
+colnames(Background) <- c("x", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+
+Background <- Background %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover) %>% 
+  filter(landcover > 0 & landcover < 128)
+
+Backer <- rep(0, nrow(Background))
+
+Background$Back <- Backer
+
+SWD <- rbind(Background, Pres1)
+
+SWD1 <- SWD[complete.cases(SWD), ]
+
+```
+
+##Annual Model 2:  Options
+
+```{r}
+#Select Which Environmental Variables to use
+x <- SWD1 %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmndjf, tmxjja, landcover)
+
+#Set which columns are Categorical
+x$landcover <- as.factor(x$landcover)
+
+#Set Arguments/Options to Pass to Maxent
+args <- c("-h", "-J", "-A", "-P", "replicates=5", "replicatetype=crossvalidate")
+
+#Set Path to Save Results
+path <- "Results/AnnualModelFitting_NLCD"
+
+#Now run this part to finish up the data work:
+p <- SWD1 %>% 
+  select(Back)
+
+```
+
+
+##Annual Model 3:  Fitting
+
+```{r}
+AnnualFitting_NLCD <- maxent(x,
+                        p,
+                        path=path,
+                        args=args,
+                        removeDuplicates = TRUE
+                         )
+
+
+save(AnnualFitting_NLCD, file = "Results/AnnualModelFitting_NLCD/Model.rData")
+```
+
+
+##Annual Model 4:  Creating a Final Model
+Here we are using what we found from the 5-kfold replicate fitting model to create a final model using 100% of occurance/background information.  Its all similar to the above fitting script just without the replicates.  The important part is to make sure the arguments match what the final fitted model settings should be and you exclude the argument for randomkfolding.
+
+Data Inputs remains the same (Use Annual Model 1:  Data Inputs code chunks if you are coming back to this later)
+
+```{r}
+#Final Model Settings
+#Select Predictors to use
+x <- SWD1 %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmndjf, tmxjja, landcover)
+
+#Select which Predictors are Factors
+x$landcover <- as.factor(x$landcover)
+
+#Set Arguments/Options to Pass to Maxent
+args <- c("-h", "-J", "-A", "-P", "maximumiterations=100000", "writeplotdata=TRUE")
+
+#Set Path to Save Results
+path <- "Results/AnnualModelFinal_NLCD"
+
+#Run this last bit to finalize options
+p <- SWD1 %>% 
+  select(Back)
+
+#Final Model Creation
+
+AnnualFinal_NLCD <- maxent(x,
+                      p,
+                      path=path,
+                      args=args
+                        )
+
+save(AnnualFinal_NLCD, file = "Results/AnnualModelFinal_NLCD/Model.rData")
+
+```
+
+##Seasonal Model 1:  Data Inputs
+
+```{r}
+#Pulling In the Monthly SWD (Presence)
+
+Jan <- read.csv("Data/SWD/NLCD/JanuaryOCC.csv")
+colnames(Jan) <- c("delete", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+Jan <- Jan %>%
+  group_by(longitude) %>% 
+  group_by(latitude) %>% 
+  distinct(longitude, latitude, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover)
+
+Feb <- read.csv("Data/SWD/NLCD/FebruaryOCC.csv")
+colnames(Feb) <- c("delete", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+Feb <- Feb %>% 
+ group_by(longitude) %>% 
+ group_by(latitude) %>% 
+ distinct(longitude, latitude, .keep_all = TRUE) %>% 
+ ungroup() %>% 
+ select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover)
+
+Mar <- read.csv("Data/SWD/NLCD/MarchOCC.csv")
+colnames(Mar) <- c("delete", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+Mar <- Mar %>% 
+ group_by(longitude) %>% 
+  group_by(latitude) %>% 
+  distinct(longitude, latitude, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover)
+
+Apr <- read.csv("Data/SWD/NLCD/AprilOCC.csv")
+colnames(Apr) <- c("delete", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+Apr <- Apr %>% 
+ group_by(longitude) %>% 
+  group_by(latitude) %>% 
+  distinct(longitude, latitude, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover)
+
+May <- read.csv("Data/SWD/NLCD/MayOCC.csv")
+colnames(May) <- c("delete", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+May <- May %>% 
+ group_by(longitude) %>% 
+  group_by(latitude) %>% 
+  distinct(longitude, latitude, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover)
+
+Jun <- read.csv("Data/SWD/NLCD/JuneOCC.csv")
+colnames(Jun) <- c("delete", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+Jun <- Jun %>% 
+ group_by(longitude) %>% 
+  group_by(latitude) %>% 
+  distinct(longitude, latitude, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover)
+
+Jul <- read.csv("Data/SWD/NLCD/JulyOCC.csv")
+colnames(Jul) <- c("delete", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+Jul <- Jul %>% 
+ group_by(longitude) %>% 
+  group_by(latitude) %>% 
+  distinct(longitude, latitude, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover)
+
+Aug <- read.csv("Data/SWD/NLCD/AugustOCC.csv")
+colnames(Aug) <- c("delete", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+Aug <- Aug %>% 
+ group_by(longitude) %>% 
+  group_by(latitude) %>% 
+  distinct(longitude, latitude, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover)
+
+Sep <- read.csv("Data/SWD/NLCD/SeptemberOCC.csv")
+colnames(Sep) <- c("delete", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+Sep <- Sep %>% 
+ group_by(longitude) %>% 
+  group_by(latitude) %>% 
+  distinct(longitude, latitude, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover)
+
+Oct <- read.csv("Data/SWD/NLCD/OctoberOCC.csv")
+colnames(Oct) <- c("delete", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+Oct <- Oct %>% 
+ group_by(longitude) %>% 
+  group_by(latitude) %>% 
+  distinct(longitude, latitude, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover)
+
+Nov <- read.csv("Data/SWD/NLCD/NovemberOCC.csv")
+colnames(Nov) <- c("delete", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+Nov <- Nov %>% 
+ group_by(longitude) %>% 
+  group_by(latitude) %>% 
+  distinct(longitude, latitude, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover)
+
+Dec <- read.csv("Data/SWD/NLCD/DecemberOCC.csv")
+colnames(Dec) <- c("delete", "landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf", "longitude", "latitude")
+Dec <- Dec %>% 
+ group_by(longitude) %>% 
+  group_by(latitude) %>% 
+  distinct(longitude, latitude, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover)
+
+Pres <- rbind(Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec)
+Pres <- Pres %>% 
+  filter(landcover > 0 & landcover<128)
+
+Presence <- rep(1, nrow(Pres))
+
+Pres$Back <- Presence
+
+write.csv(Pres, file = "Data/SWD/NLCD/presSWD.csv")
+
+#Pulling in the Background SWD
+
+Background <- read.csv("Data/SWD/NLCD/BackgroundSWD.csv")
+Background <- Background %>%
+  select(aet, cwd, ppt, pptdjf, tmx, tmxjja, tmndjf, landcover) %>% 
+  filter(landcover > 0 & landcover<128)
+
+Backer <- rep(0, nrow(Background))
+
+Background$Back <- Backer
+
+SWD <- rbind(Background, Pres)
+
+SWD <- SWD[complete.cases(SWD), ]
+
+```
+
+##Seasonal Model 2:  Model Settings
+
+```{r}
+
+#Select Predictors to use
+x <- SWD %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmndjf, tmxjja, landcover)
+
+#Select which Predictors are Factors
+x$landcover <- as.factor(x$landcover)
+
+#Set Arguments/Options to Pass to Maxent
+args <- c("-h", "-J", "-A", "-P", "replicates=5", "replicatetype=crossvalidate")
+
+#Set Path to Save Results
+path <- "Results/SeasonalModelFitting_NLCD"
+
+#Run this last bit to finalize options
+p <- SWD %>% 
+  select(Back)
+```
+
+##Seasonal Model 3:  Model Fitting
+
+```{r}
+SeasonalFitting_NLCD <- maxent(x,
+                         p,
+                         #nbg=nbg,
+                         #factors=factors,
+                         path=path,
+                         args=args
+                         )
+
+save(SeasonalFitting_NLCD, file = "Results/SeasonalModelFitting_NLCD/model.RData")
+```
+
+
+##Seasonal Model 4:  Creating a Final Model
+Here we are using what we found from the 5-kfold replicate fitting model to create a final model using 100% of occurance/background information.  Its all similar to the above fitting script just without the replicates.  The important part is to make sure the arguments match what the final fitted model settings should be and you exclude the argument for randomkfolding.
+
+Data Inputs remains the same (Use Seasonal Model 1:  Data Inputs code chunks if you are coming back to this later)
+
+```{r}
+#Final Model Settings
+#Select Predictors to use
+x <- SWD %>% 
+  select(aet, cwd, ppt, pptdjf, tmx, tmndjf, tmxjja, landcover)
+
+#Select which Predictors are Factors
+x$landcover <- as.factor(x$landcover)
+
+#Set Arguments/Options to Pass to Maxent
+args <- c("-h", "-J", "-A", "-P", "maximumiterations=10000", "writeplotdata=TRUE")
+
+#Set Path to Save Results
+path <- "Results/SeasonalModelFinal_NLCD"
+
+#Run this last bit to finalize options
+p <- SWD %>% 
+  select(Back)
+
+#Final Model Creation
+
+SeasonalFinal_NLCD <- maxent(x,
+                         p,
+                         #nbg=nbg,
+                         #factors=factors,
+                         path=path,
+                         args=args
+                         )
+
+save(SeasonalFinal_NLCD, file = "Results/SeasonalModelFinal_NLCD/Model.rData")
+
+```
+
+
+##Predictions 1:  Annual Model
+Using a created maxent object.
+
+Note:  This script creates a temporary raster folder to store temp files used to create the objects.  This was done on my home PC because I did not have sufficient space on my C drive (where R is installed and where by default temp raster are creates).  You'll need to change that (or hash it out if not necessary) based on your own computer
+
+```{r}
+load("Results/AnnualModelFinal_NLCD/Model.rData")
+
+rasterOptions(tmpdir="RasterTemp")
+
+AnnEnv <- raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/aet_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/cwd_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/ppt_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmx_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/Current/BCMSnapAnnual90/aet_90m.tif")
+AnnEnv <- mask(AnnEnv, aet)
+AnnEnv$CONUS_Historical_90m[AnnEnv$CONUS_Historical_90m == 0|
+                            AnnEnv$CONUS_Historical_90m ==128] <- NA
+names(AnnEnv) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+
+
+Pred_Annual <- predict(AnnualFinal_NLCD, AnnEnv)
+
+writeRaster(Pred_Annual, filename = "Results/AnnualModelFinal_NLCD/Predictions/Current.tif", overwrite=TRUE)
+
+png(filename = "Results/AnnualModelFinal_NLCD/Predictions/Current.png")
+plot(Pred_Annual)
+dev.off()
+
+remove <- normalizePath(list.files(path = "RasterTemp", pattern=glob2rx("*.gri"), full.names = TRUE))
+
+file.remove(remove)
+
+```
+
+##Predictions 2:  Seasonal Model
+
+Using a created maxent object.
+
+Note:  This script creates a temporary raster folder to store temp files used to create the objects.  This was done on my home PC because I did not have sufficient space on my C drive (where R is installed and where by default temp raster are creates).  You'll need to change that (or hash it out if not necessary) based on your own computer
+
+```{r}
+
+load("Results/SeasonalModelFinal_NLCD/Model.rData")
+rasterOptions(tmpdir="RasterTemp")
+
+#January
+praster <-raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetjan_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdjan_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptjan_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxjan_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/Current/BCMSnapMonth90/aetjan_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_Historical_90m[praster2$CONUS_Historical_90m == 0|
+                            praster2$CONUS_Historical_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+JanPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(JanPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/01Jan.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/PNG01Jan.png")
+plot(JanPred_m)
+dev.off()
+
+
+#February
+
+praster <-raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetfeb_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdfeb_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptfeb_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxfeb_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/Current/BCMSnapMonth90/aetfeb_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_Historical_90m[praster2$CONUS_Historical_90m == 0|
+                            praster2$CONUS_Historical_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current//02Feb.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/PNG02Feb.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#March
+
+praster <-raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetmar_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdmar_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptmar_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxmar_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/Current/BCMSnapMonth90/aetmar_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_Historical_90m[praster2$CONUS_Historical_90m == 0|
+                            praster2$CONUS_Historical_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/03Mar.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/PNG03Mar.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#April
+praster <-raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetapr_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdapr_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptapr_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxapr_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/Current/BCMSnapMonth90/aetapr_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_Historical_90m[praster2$CONUS_Historical_90m == 0|
+                            praster2$CONUS_Historical_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/04Apr.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/PNG04Apr.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#May
+
+praster <-raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetmay_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdmay_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptmay_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxmay_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/Current/BCMSnapMonth90/aetmay_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_Historical_90m[praster2$CONUS_Historical_90m == 0|
+                            praster2$CONUS_Historical_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/05May.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/PNG05May.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#June
+
+praster <-raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetjun_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdjun_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptjun_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxjun_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/Current/BCMSnapMonth90/aetjun_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_Historical_90m[praster2$CONUS_Historical_90m == 0|
+                            praster2$CONUS_Historical_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/06Jun.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/PNG06Jun.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#July
+
+praster <-raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetjul_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdjul_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptjul_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxjul_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/Current/BCMSnapMonth90/aetjul_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_Historical_90m[praster2$CONUS_Historical_90m == 0|
+                            praster2$CONUS_Historical_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/07Jul.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/PNG07Jul.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#August
+praster <-raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetaug_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdaug_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptaug_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxaug_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/Current/BCMSnapMonth90/aetaug_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_Historical_90m[praster2$CONUS_Historical_90m == 0|
+                            praster2$CONUS_Historical_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/08Aug.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/PNG08Aug.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#September
+
+praster <-raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetsep_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdsep_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptsep_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxsep_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/Current/BCMSnapMonth90/aetsep_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_Historical_90m[praster2$CONUS_Historical_90m == 0|
+                            praster2$CONUS_Historical_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/09Sep.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/PNG09Sep.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#October
+
+praster <-raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetoct_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdoct_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptoct_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxoct_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/Current/BCMSnapMonth90/aetoct_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_Historical_90m[praster2$CONUS_Historical_90m == 0|
+                            praster2$CONUS_Historical_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/10Oct.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/PNG10Oct.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#November
+
+praster <-raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetnov_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwdnov_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptnov_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxnov_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/Current/BCMSnapMonth90/aetnov_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_Historical_90m[praster2$CONUS_Historical_90m == 0|
+                            praster2$CONUS_Historical_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/11Nov.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/PNG11Nov.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#December
+
+praster <-raster::stack("Data/Forecast_NLCD/Historic/CONUS_Historical_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/aetdec_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/cwddec_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/pptdec_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/Current/BCMSnapMonth90/tmxdec_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/Current/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/Current/BCMSnapMonth90/aetdec_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_Historical_90m[praster2$CONUS_Historical_90m == 0|
+                            praster2$CONUS_Historical_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/12Dec.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/Current/PNG12Dec.png")
+plot(MonthPred_m)
+dev.off()
+
+#Remove files
+remove <- normalizePath(list.files(path = "RasterTemp", pattern=glob2rx("*.gri"), full.names = TRUE))
+file.remove(remove)
+
+
+```
+
+
+##Extracting data behind the response curves
+
+The script spits out response curves but it uses a default format that can look pretty ugly.  This is how I extract the variable response values and the predicted value for each variable.
+
+```{r}
+#Load the model you want to work with first.  Note that models may use additional or not all of the variables listed below.
+
+#Annual
+response <- response(AnnualFinal_NLCD, var = "aet")
+write.csv(response, file = "Results/AnnualModelFinal_NLCD/Response/aet.csv")
+
+response <- response(AnnualFinal_NLCD, var = "cwd")
+write.csv(response, file = "Results/AnnualModelFinal_NLCD/Response/cwd.csv")
+
+response <- response(AnnualFinal_NLCD, var = "landcover")
+write.csv(response, file = "Results/AnnualModelFinal_NLCD/Response/landcover.csv")
+
+response <- response(AnnualFinal_NLCD, var = "ppt")
+write.csv(response, file = "Results/AnnualModelFinal_NLCD/Response/ppt.csv")
+
+response <- response(AnnualFinal_NLCD, var = "pptdjf")
+write.csv(response, file = "Results/AnnualModelFinal_NLCD/Response/pptdjf.csv")
+
+response <- response(AnnualFinal_NLCD, var = "tmndjf")
+write.csv(response, file = "Results/AnnualModelFinal_NLCD/Response/tmndjf.csv")
+
+response <- response(AnnualFinal_NLCD, var = "tmx")
+write.csv(response, file = "Results/AnnualModelFinal_NLCD/Response/tmx.csv")
+
+response <- response(AnnualFinal_NLCD, var = "tmxjja")
+write.csv(response, file = "Results/AnnualModelFinal_NLCD/Response/tmxjja.csv")
+
+
+#Seasonal
+response <- response(SeasonalFinal_NLCD, var = "aet")
+write.csv(response, file = "Results/SeasonalModelFinal_NLCD/Response/aet.csv")
+
+response <- response(SeasonalFinal_NLCD, var = "cwd")
+write.csv(response, file = "Results/SeasonalModelFinal_NLCD/Response/cwd.csv")
+
+response <- response(SeasonalFinal_NLCD, var = "landcover")
+write.csv(response, file = "Results/SeasonalModelFinal_NLCD/Response/landcover.csv")
+
+response <- response(SeasonalFinal_NLCD, var = "ppt")
+write.csv(response, file = "Results/SeasonalModelFinal_NLCD/Response/ppt.csv")
+
+response <- response(SeasonalFinal_NLCD, var = "pptdjf")
+write.csv(response, file = "Results/SeasonalModelFinal_NLCD/Response/pptdjf.csv")
+
+response <- response(SeasonalFinal_NLCD, var = "tmndjf")
+write.csv(response, file = "Results/SeasonalModelFinal_NLCD/Response/tmndjf.csv")
+
+response <- response(SeasonalFinal_NLCD, var = "tmx")
+write.csv(response, file = "Results/SeasonalModelFinal_NLCD/Response/tmx.csv")
+
+response <- response(SeasonalFinal_NLCD, var = "tmxjja")
+write.csv(response, file = "Results/SeasonalModelFinal_NLCD/Response/tmxjja.csv")
+
+```
+
+
+#Future environmental layers
+Experiment with raster stack of future environmental layers -start with one gcm and annual
+And then use predict (model, new env layers)
+
+## Future Predictions 1: Annual Model
+
+```{r}
+
+load("Results/AnnualModelFinal_NLCD/Model.rData")
+
+rasterOptions(tmpdir="RasterTemp")
+
+#MIROC 45
+AnnEnv_miroc45 <- raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/aet_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/cwd_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/ppt_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmx_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet_miroc45 <- raster("Data/BCM/MIROC45/BCMSnapAnnual90/aet_90m.tif")
+AnnEnv_miroc45 <- mask(AnnEnv_miroc45, aet_miroc45)
+AnnEnv_miroc45$CONUS_B1_90m[AnnEnv_miroc45$CONUS_B1_90m == 0|
+                                      AnnEnv_miroc45$CONUS_B1_90m == 128] <- NA
+names(AnnEnv_miroc45) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+
+Pred_Annual_miroc45 <- predict(AnnualFinal_NLCD, AnnEnv_miroc45)
+
+writeRaster(Pred_Annual_miroc45, filename = "Results/AnnualModelFinal_NLCD/Predictions/MIROC45.tif")
+png(filename = "Results/AnnualModelFinal_NLCD/Predictions/MIROC45.png")
+plot(Pred_Annual_miroc45)
+dev.off()
+
+#MIROC 85
+AnnEnv_miroc85 <- raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/aet_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/cwd_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/ppt_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmx_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet_miroc85 <- raster("Data/BCM/MIROC85/BCMSnapAnnual90/aet_90m.tif")
+AnnEnv_miroc85 <- mask(AnnEnv_miroc85, aet_miroc85)
+AnnEnv_miroc85$CONUS_A2_90m[AnnEnv_miroc85$CONUS_A2_90m == 0|
+                                      AnnEnv_miroc85$CONUS_A2_90m == 128] <- NA
+names(AnnEnv_miroc85) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+
+Pred_Annual_miroc85 <- predict(AnnualFinal_NLCD, AnnEnv_miroc85)
+writeRaster(Pred_Annual_miroc85, filename = "Results/AnnualModelFinal_NLCD/Predictions/MIROC85.tif")
+png(filename = "Results/AnnualModelFinal_NLCD/Predictions/MIROC85.png")
+plot(Pred_Annual_miroc85)
+dev.off()
+
+#MPI 45
+AnnEnv_mpi45 <- raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/aet_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/cwd_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/ppt_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmx_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet_mpi45<- raster("Data/BCM/MPI45/BCMSnapAnnual90/aet_90m.tif")
+AnnEnv_mpi45 <- mask(AnnEnv_mpi45, aet_mpi45)
+AnnEnv_mpi45$CONUS_B1_90m[AnnEnv_mpi45$CONUS_B1_90m == 0|
+                                      AnnEnv_mpi45$CONUS_B1_90m == 128] <- NA
+names(AnnEnv_mpi45) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+
+Pred_Annual_mpi45 <- predict(AnnualFinal_NLCD, AnnEnv_mpi45)
+writeRaster(Pred_Annual_mpi45, filename = "Results/AnnualModelFinal_NLCD/Predictions/MPI45.tif")
+png(filename = "Results/AnnualModelFinal_NLCD/Predictions/MPI45.png")
+plot(Pred_Annual_mpi45)
+dev.off()
+
+#CNRM85
+AnnEnv_cnrm85 <- raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/aet_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/cwd_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/ppt_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmx_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet_cnrm85 <- raster("Data/BCM/CNRM85/BCMSnapAnnual90/aet_90m.tif")
+AnnEnv_cnrm85 <- mask(AnnEnv_cnrm85, aet_cnrm85)
+AnnEnv_cnrm85$CONUS_A2_90m[AnnEnv_cnrm85$CONUS_A2_90m == 0|
+                                      AnnEnv_cnrm85$CONUS_A2_90m == 128] <- NA
+names(AnnEnv_cnrm85) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+
+Pred_Annual_cnrm85 <- predict(AnnualFinal_NLCD, AnnEnv_cnrm85)
+writeRaster(Pred_Annual_cnrm85, filename = "Results/AnnualModelFinal_NLCD/Predictions/CNRM85.tif")
+png(filename = "Results/AnnualModelFinal_NLCD/Predictions/CNRM85.png")
+plot(Pred_Annual_cnrm85)
+dev.off()
+
+
+remove <- normalizePath(list.files(path = "RasterTemp", pattern=glob2rx("*.gri"), full.names = TRUE))
+file.remove(remove)
+
+```
+
+## Future Predictions 2: Seasonal Model
+
+
+
+### MPI45
+
+```{r}
+
+load("Results/SeasonalModelFinal_NLCD/Model.rData")
+rasterOptions(tmpdir="RasterTemp")
+
+#January
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/aetjan_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/cwdjan_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/pptjan_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/tmxjan_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MPI45/BCMSnapMonth90/aetjan_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+JanPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(JanPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/01Jan.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/PNG01Jan.png")
+plot(JanPred_m)
+dev.off()
+
+
+#February
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/aetfeb_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/cwdfeb_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/pptfeb_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/tmxfeb_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MPI45/BCMSnapMonth90/aetfeb_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45//02Feb.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/PNG02Feb.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#March
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/aetmar_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/cwdmar_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/pptmar_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/tmxmar_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MPI45/BCMSnapMonth90/aetmar_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/03Mar.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/PNG03Mar.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#April
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/aetapr_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/cwdapr_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/pptapr_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/tmxapr_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MPI45/BCMSnapMonth90/aetapr_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/04Apr.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/PNG04Apr.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#May
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/aetmay_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/cwdmay_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/pptmay_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/tmxmay_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MPI45/BCMSnapMonth90/aetmay_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/05May.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/PNG05May.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#June
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/aetjun_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/cwdjun_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/pptjun_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/tmxjun_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MPI45/BCMSnapMonth90/aetjun_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/06Jun.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/PNG06Jun.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#July
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/aetjul_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/cwdjul_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/pptjul_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/tmxjul_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MPI45/BCMSnapMonth90/aetjul_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/07Jul.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/PNG07Jul.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#August
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/aetaug_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/cwdaug_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/pptaug_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/tmxaug_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MPI45/BCMSnapMonth90/aetaug_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/08Aug.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/PNG08Aug.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#September
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/aetsep_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/cwdsep_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/pptsep_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/tmxsep_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MPI45/BCMSnapMonth90/aetsep_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/09Sep.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/PNG09Sep.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#October
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/aetoct_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/cwdoct_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/pptoct_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/tmxoct_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MPI45/BCMSnapMonth90/aetoct_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/10Oct.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/PNG10Oct.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#November
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/aetnov_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/cwdnov_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/pptnov_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/tmxnov_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MPI45/BCMSnapMonth90/aetnov_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/11Nov.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/PNG11Nov.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#December
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/aetdec_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/cwddec_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/pptdec_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapMonth90/tmxdec_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MPI45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MPI45/BCMSnapMonth90/aetdec_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/12Dec.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MPI45/PNG12Dec.png")
+plot(MonthPred_m)
+dev.off()
+
+#Remove files
+remove <- normalizePath(list.files(path = "RasterTemp", pattern=glob2rx("*.gri"), full.names = TRUE))
+file.remove(remove)
+
+
+```
+
+### MIROC45
+
+```{r}
+
+load("Results/SeasonalModelFinal_NLCD/Model.rData")
+rasterOptions(tmpdir="RasterTemp")
+
+#January
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/aetjan_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/cwdjan_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/pptjan_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/tmxjan_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC45/BCMSnapMonth90/aetjan_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+JanPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(JanPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/01Jan.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/PNG01Jan.png")
+plot(JanPred_m)
+dev.off()
+
+
+#February
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/aetfeb_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/cwdfeb_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/pptfeb_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/tmxfeb_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC45/BCMSnapMonth90/aetfeb_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45//02Feb.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/PNG02Feb.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#March
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/aetmar_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/cwdmar_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/pptmar_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/tmxmar_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC45/BCMSnapMonth90/aetmar_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/03Mar.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/PNG03Mar.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#April
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/aetapr_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/cwdapr_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/pptapr_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/tmxapr_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC45/BCMSnapMonth90/aetapr_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/04Apr.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/PNG04Apr.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#May
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/aetmay_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/cwdmay_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/pptmay_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/tmxmay_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC45/BCMSnapMonth90/aetmay_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/05May.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/PNG05May.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#June
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/aetjun_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/cwdjun_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/pptjun_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/tmxjun_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC45/BCMSnapMonth90/aetjun_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/06Jun.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/PNG06Jun.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#July
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/aetjul_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/cwdjul_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/pptjul_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/tmxjul_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC45/BCMSnapMonth90/aetjul_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/07Jul.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/PNG07Jul.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#August
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/aetaug_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/cwdaug_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/pptaug_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/tmxaug_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC45/BCMSnapMonth90/aetaug_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/08Aug.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/PNG08Aug.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#September
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/aetsep_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/cwdsep_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/pptsep_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/tmxsep_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC45/BCMSnapMonth90/aetsep_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/09Sep.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/PNG09Sep.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#October
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/aetoct_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/cwdoct_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/pptoct_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/tmxoct_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC45/BCMSnapMonth90/aetoct_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/10Oct.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/PNG10Oct.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#November
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/aetnov_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/cwdnov_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/pptnov_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/tmxnov_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC45/BCMSnapMonth90/aetnov_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/11Nov.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/PNG11Nov.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#December
+
+praster <-raster::stack("Data/Forecast_NLCD/B1/CONUS_B1_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/aetdec_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/cwddec_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/pptdec_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapMonth90/tmxdec_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC45/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC45/BCMSnapMonth90/aetdec_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_B1_90m[praster2$CONUS_B1_90m ==0|
+                      praster2$CONUS_B1_90m ==128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/12Dec.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC45/PNG12Dec.png")
+plot(MonthPred_m)
+dev.off()
+
+#Remove files
+remove <- normalizePath(list.files(path = "RasterTemp", pattern=glob2rx("*.gri"), full.names = TRUE))
+file.remove(remove)
+
+
+
+
+```
+
+### MIROC85
+
+```{r}
+
+load("Results/SeasonalModelFinal_NLCD/Model.rData")
+rasterOptions(tmpdir="RasterTemp")
+
+#January
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/aetjan_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/cwdjan_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/pptjan_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/tmxjan_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC85/BCMSnapMonth90/aetjan_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+JanPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(JanPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/01Jan.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/PNG01Jan.png")
+plot(JanPred_m)
+dev.off()
+
+
+#February
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/aetfeb_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/cwdfeb_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/pptfeb_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/tmxfeb_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC85/BCMSnapMonth90/aetfeb_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85//02Feb.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/PNG02Feb.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#March
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/aetmar_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/cwdmar_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/pptmar_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/tmxmar_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC85/BCMSnapMonth90/aetmar_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/03Mar.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/PNG03Mar.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#April
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/aetapr_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/cwdapr_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/pptapr_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/tmxapr_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC85/BCMSnapMonth90/aetapr_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/04Apr.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/PNG04Apr.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#May
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/aetmay_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/cwdmay_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/pptmay_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/tmxmay_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC85/BCMSnapMonth90/aetmay_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/05May.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/PNG05May.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#June
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/aetjun_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/cwdjun_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/pptjun_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/tmxjun_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC85/BCMSnapMonth90/aetjun_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/06Jun.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/PNG06Jun.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#July
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/aetjul_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/cwdjul_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/pptjul_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/tmxjul_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC85/BCMSnapMonth90/aetjul_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/07Jul.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/PNG07Jul.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#August
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/aetaug_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/cwdaug_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/pptaug_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/tmxaug_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC85/BCMSnapMonth90/aetaug_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/08Aug.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/PNG08Aug.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#September
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/aetsep_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/cwdsep_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/pptsep_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/tmxsep_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC85/BCMSnapMonth90/aetsep_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/09Sep.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/PNG09Sep.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#October
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/aetoct_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/cwdoct_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/pptoct_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/tmxoct_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC85/BCMSnapMonth90/aetoct_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/10Oct.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/PNG10Oct.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#November
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/aetnov_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/cwdnov_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/pptnov_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/tmxnov_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC85/BCMSnapMonth90/aetnov_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/11Nov.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/PNG11Nov.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#December
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/aetdec_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/cwddec_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/pptdec_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapMonth90/tmxdec_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/MIROC85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/MIROC85/BCMSnapMonth90/aetdec_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/12Dec.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/MIROC85/PNG12Dec.png")
+plot(MonthPred_m)
+dev.off()
+
+#Remove files
+remove <- normalizePath(list.files(path = "RasterTemp", pattern=glob2rx("*.gri"), full.names = TRUE))
+file.remove(remove)
+
+
+
+
+```
+
+### CNRM85
+
+```{r}
+
+load("Results/SeasonalModelFinal_NLCD/Model.rData")
+rasterOptions(tmpdir="RasterTemp")
+
+#January
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/aetjan_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/cwdjan_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/pptjan_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/tmxjan_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/CNRM85/BCMSnapMonth90/aetjan_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+JanPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(JanPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/01Jan.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/PNG01Jan.png")
+plot(JanPred_m)
+dev.off()
+
+
+#February
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/aetfeb_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/cwdfeb_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/pptfeb_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/tmxfeb_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/CNRM85/BCMSnapMonth90/aetfeb_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85//02Feb.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/PNG02Feb.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#March
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/aetmar_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/cwdmar_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/pptmar_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/tmxmar_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/CNRM85/BCMSnapMonth90/aetmar_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/03Mar.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/PNG03Mar.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#April
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/aetapr_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/cwdapr_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/pptapr_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/tmxapr_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/CNRM85/BCMSnapMonth90/aetapr_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/04Apr.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/PNG04Apr.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#May
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/aetmay_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/cwdmay_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/pptmay_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/tmxmay_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/CNRM85/BCMSnapMonth90/aetmay_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/05May.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/PNG05May.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#June
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/aetjun_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/cwdjun_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/pptjun_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/tmxjun_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/CNRM85/BCMSnapMonth90/aetjun_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/06Jun.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/PNG06Jun.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#July
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/aetjul_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/cwdjul_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/pptjul_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/tmxjul_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/CNRM85/BCMSnapMonth90/aetjul_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/07Jul.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/PNG07Jul.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#August
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/aetaug_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/cwdaug_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/pptaug_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/tmxaug_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/CNRM85/BCMSnapMonth90/aetaug_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/08Aug.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/PNG08Aug.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#September
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/aetsep_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/cwdsep_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/pptsep_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/tmxsep_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/CNRM85/BCMSnapMonth90/aetsep_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/09Sep.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/PNG09Sep.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#October
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/aetoct_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/cwdoct_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/pptoct_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/tmxoct_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/CNRM85/BCMSnapMonth90/aetoct_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/10Oct.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/PNG10Oct.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#November
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/aetnov_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/cwdnov_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/pptnov_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/tmxnov_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/CNRM85/BCMSnapMonth90/aetnov_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/11Nov.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/PNG11Nov.png")
+plot(MonthPred_m)
+dev.off()
+
+
+#December
+
+praster <-raster::stack("Data/Forecast_NLCD/A2/CONUS_A2_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/aetdec_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/cwddec_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/pptdec_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/pptdjf_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapMonth90/tmxdec_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmxjja_90m.tif",
+                       "Data/BCM/CNRM85/BCMSnapAnnual90/tmndjf_90m.tif")
+
+aet <- raster("Data/BCM/CNRM85/BCMSnapMonth90/aetdec_90m.tif")
+praster2 <- mask(praster, aet)
+praster2$CONUS_A2_90m[praster2$CONUS_A2_90m == 0|
+                      praster2$CONUS_A2_90m == 128] <- NA
+names(praster2) <- c("landcover", "aet", "cwd", "ppt", "pptdjf", "tmx", "tmxjja", "tmndjf")
+MonthPred_m <- predict(SeasonalFinal_NLCD, praster2)
+writeRaster(MonthPred_m, filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/12Dec.tif")
+
+png(filename = "Results/SeasonalModelFinal_NLCD/Predictions/CNRM85/PNG12Dec.png")
+plot(MonthPred_m)
+dev.off()
+
+#Remove files
+remove <- normalizePath(list.files(path = "RasterTemp", pattern=glob2rx("*.gri"), full.names = TRUE))
+file.remove(remove)
+
+```
+
