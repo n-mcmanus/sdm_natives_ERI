@@ -230,25 +230,3 @@ a_polycarpa <- sp_filter("A_polycarpa.csv")
 blah <- read_csv(here("data/species_occurrence_GBIF/raw/A_polycarpa.csv"))
 ```
 
-
-
-
-
-Convert folder of ASCII files to rasters. ASCII files have associated coordinates but usually not explicitly defined CRS when read in as a raster. Use this code to convert an entire file of .asc files to .tif files with appropriate CRS. BCM data uses NAD83 CA Albers (EPSG:3310)
-```{r}
-### Assign file path to global variable (selecting all .asc files)
-fasc <- list.files(path = "data/" , pattern='\\.asc$', full=TRUE)
-ftif <- gsub("\\.asc$", ".tif", fasc)
-
-### Loop to read in .asc, add crs, then output .tif
-for (i in 1:length(fasc)) {
-    r <- rast(fasc[i])
-    crs(r) <- "epsg: 3310"
-    writeRaster(r, ftif[i])
-}
-
-## Test the new file
-aet <- rast("data/aet.tif")
-
-```
-
