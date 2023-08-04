@@ -1,0 +1,109 @@
+---
+title: "Kern Natives SDM"
+author: "Nick McManus"
+date: "2023-08-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)    ## always
+library(here)         ## reading/writing data
+library(terra)        ## Better/faster GIS
+library(raster)       ## GIS format required by Dismo
+library(dismo)        ## Maxent pkg
+library(lubridate)    ## Dates and progress bar
+```
+
+
+## Overview
+
+This script extracts environmental data for each species occurrence (based on location and time). This data is then used to perform a species distribution model using Maxent with `dismo`.
+
+*   Species occurrence data was pulled from GBIF (and maybe CalFlora?) and filtered to return reasonably accurate presence-only data in California. The script for this is in "src" directory.
+
+*   Environmental data comes from the Basin Characterization Model version 8.0 (Flint et al., 2021) hosted by USGS. 
+
+
+
+## Convert ASC to TIF
+
+Publicly available BCMv8 files are in .asc format. ASCII files have associated coordinates but usually do not have an explicitly defined CRS when read in as a raster. Additionally, .tif have smaller file sizes than .asc, so conversion saves on data storage. Use this code to convert an entire file of .asc files to .tif files with appropriate CRS. BCM data uses NAD83 CA Albers (EPSG:3310)
+```{r}
+## Assign file path (selects all .asc files in directory)
+file_asc <- list.files(path = here("data/bcmv8/2000_2009/"), 
+                   pattern='\\.asc$', 
+                   full=TRUE)
+## Saves files w/same name but as .tif
+file_tif <- gsub("\\.asc$", ".tif", file_asc)
+
+
+## Progress bar
+fileLength <- length(file_asc)
+pb <- txtProgressBar(min = 0,
+                     max = fileLength,
+                     style = 3,
+                     width = fileLength,
+                     char = "=")
+
+
+## Loop to read in .asc, add crs, then output .tif
+for (i in 1:fileLength) {
+    r <- rast(file_asc[i])
+    crs(r) <- "epsg: 3310"
+    writeRaster(r, file_tif[i])
+    
+    setTxtProgressBar(pb, i)
+}
+```
+
+
+
+## Extract environmental data
+
+
+Using BCMv8 rasters, we'll extract information for each species occurrence.
+```{r}
+## Read in occ df
+spOcc <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa.csv')) %>% 
+  janitor::clean_names() %>% 
+  dplyr::select(gbifid, decimallatitude, decimallongitude, month, year)
+
+
+## create df for dates
+dates_df <- data.frame(year = rep(2020:2022, each = 12), 
+                       mon = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                               'jul', 'aug', 'sep', 'oct', 'nov', 'dec'),
+                       mon_num = seq(1, 12, 1))
+
+
+## Read in files based on year/mo in name
+files <- list.files(path = here("data/bcmv8/2021_2022/"), 
+                   pattern= paste0(dates_df[13,1], '\\', dates_df[13,2]), 
+                   full=TRUE)
+
+## Stack all rasters
+env_stack <- rast(c(files))
+
+## Filter obs to year/mo,
+## then vectorize and reproj to env data crs
+spOcc_filter <- spOcc %>% 
+  filter(year == dates_df[13,1],
+         month == dates_df[13,3])
+spOcc_vect <- spOcc_filter %>% 
+  vect(geom = c("decimallongitude", "decimallatitude"), crs = "WGS84") %>% 
+  project(y = crs(env_stack))
+
+
+## extract and tidy df
+spExtract <- extract(env_stack, spOcc_vect, method = "simple") %>%
+  ## only keep first 3 chars of each column name
+  ## (e.g. "cwd2021jan" becomes "cwd")
+  rename_with(~substr(., 1, 3)) %>% 
+  ## merge occ data w/extract data
+  cbind(spOcc_filter, .) %>% 
+  dplyr::select(-ID)
+
+
+```
+
