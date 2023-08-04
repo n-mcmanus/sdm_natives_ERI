@@ -63,6 +63,8 @@ for (i in 1:fileLength) {
 
 
 Using BCMv8 rasters, we'll extract information for each species occurrence.
+
+**NOTE**: still need to figure out how to deal with NAs (i.e. no data for a specific mo/yr...). Currently crashes for loop
 ```{r}
 ## Read in occ df
 spOcc <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa.csv')) %>% 
@@ -71,38 +73,47 @@ spOcc <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa.csv')) %>%
 
 
 ## create df for dates
-dates_df <- data.frame(year = rep(2020:2022, each = 12), 
+dates_df <- data.frame(year = rep(2021:2022, each = 12), 
                        mon = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
                                'jul', 'aug', 'sep', 'oct', 'nov', 'dec'),
                        mon_num = seq(1, 12, 1))
 
+## empty df
+extract_df <- data.frame()
 
-## Read in files based on year/mo in name
-files <- list.files(path = here("data/bcmv8/2021_2022/"), 
-                   pattern= paste0(dates_df[13,1], '\\', dates_df[13,2]), 
-                   full=TRUE)
-
-## Stack all rasters
-env_stack <- rast(c(files))
-
-## Filter obs to year/mo,
-## then vectorize and reproj to env data crs
-spOcc_filter <- spOcc %>% 
-  filter(year == dates_df[13,1],
-         month == dates_df[13,3])
-spOcc_vect <- spOcc_filter %>% 
-  vect(geom = c("decimallongitude", "decimallatitude"), crs = "WGS84") %>% 
-  project(y = crs(env_stack))
-
-
-## extract and tidy df
-spExtract <- extract(env_stack, spOcc_vect, method = "simple") %>%
-  ## only keep first 3 chars of each column name
-  ## (e.g. "cwd2021jan" becomes "cwd")
-  rename_with(~substr(., 1, 3)) %>% 
-  ## merge occ data w/extract data
-  cbind(spOcc_filter, .) %>% 
-  dplyr::select(-ID)
+## Test loop
+for (i in 1:nrow(dates_df)) {
+  
+  ## Read in list of filenames
+  files <- list.files(path = here("data/bcmv8/2021_2022/"), 
+                      ## only list those with matching yr/mo in name
+                      pattern= paste0(dates_df[i, 1], dates_df[i, 2]), 
+                      full=TRUE)
+  
+  ## Stack all rasters
+  env_stack <- terra::rast(c(files))
+  
+  ## Filter obs to year/mo,
+  ## then vectorize and reproj to env data crs
+  spOcc_filter <- spOcc %>% 
+    filter(year == dates_df[i,1],
+           month == dates_df[i,3])
+  spOcc_vect <- spOcc_filter %>% 
+    vect(geom = c("decimallongitude", "decimallatitude"), crs = "WGS84") %>% 
+    project(y = crs(env_stack))
+  
+  ## extract and tidy df
+  spExtract <- extract(env_stack, spOcc_vect, method = "simple") %>%
+    ## only keep first 3 chars of each column name
+    ## (e.g. "cwd2021jan" becomes "cwd")
+    rename_with(~substr(., 1, 3)) %>% 
+    ## merge occ data w/extract data
+    cbind(spOcc_filter, .) %>% 
+    dplyr::select(-ID)
+  
+  
+  extract_df <- rbind(extract_df, spExtract)
+}
 
 
 ```
