@@ -57,6 +57,12 @@ for (i in 1:fileLength) {
 }
 ```
 
+```{r}
+source(here('R/asc_to_tif.R'))
+filepath = here('data/bcmv8/test/')
+asc_to_tif(filepath)
+```
+
 
 
 ## Extract environmental data
