@@ -31,7 +31,7 @@ This script extracts environmental data for each species occurrence (based on lo
 Publicly available BCMv8 files are in .asc format. ASCII files have associated coordinates but usually do not have an explicitly defined CRS when read in as a raster. Additionally, .tif have smaller file sizes than .asc, so conversion saves on data storage. Use this code to convert an entire file of .asc files to .tif files with appropriate CRS. BCM data uses NAD83 CA Albers (EPSG:3310)
 ```{r}
 ## Assign file path (selects all .asc files in directory)
-file_asc <- list.files(path = here("data/bcmv8/2000_2009/"), 
+file_asc <- list.files(path = here("data/bcmv8/2010_2020/"), 
                    pattern='\\.asc$', 
                    full=TRUE)
 ## Saves files w/same name but as .tif
@@ -62,71 +62,51 @@ for (i in 1:fileLength) {
 ## Extract environmental data
 
 
-Using BCMv8 rasters, we'll extract information for each species occurrence.
+Using BCMv8 rasters, we'll extract information for each species occurrence within the given timeframe. Outputs 
+
 ```{r}
 ## Read in occ df
-spOcc <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa.csv')) %>% 
+sppOcc <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa.csv')) %>% 
   janitor::clean_names() %>% 
   dplyr::select(gbifid, decimallatitude, decimallongitude, month, year)
 
-
-## Create df for dates
-dates_df <- data.frame(year = rep(2021:2022, each = 12), 
-                       mon = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
-                               'jul', 'aug', 'sep', 'oct', 'nov', 'dec'),
-                       mon_num = seq(1, 12, 1))
-## Rearrange to water year format
-## put last 3 mo at top, adjust calendar year
-dates_df <- rbind(tail(dates_df, 3), head(dates_df, -3))
-dates_df[1:3, 1] = (dates_df[4,1] - 1)
+## Read in fxn
+source(here('R/bcm_spp_extract.R'))
 ```
+
+
 
 ```{r}
-## empty df to store loop results
-extract_df <- data.frame()
+### 2000-2009 Extraction ----------------------------------------
+## select directory of env rasters
+path <- here('data/bcmv8/2000_2009/')
 
-## Extract loop
-for (i in 1:nrow(dates_df)) {
-  ## Read in list of filenames
-  files <- list.files(path = here("data/bcmv8/2021_2022/"), 
-                      ## only list those with matching yr/mo in name
-                      pattern= paste0(dates_df[i, 1], dates_df[i, 2]), 
-                      full=TRUE)
-  
-  ## Stack all rasters
-  env_stack <- terra::rast(c(files))
-  
-  ## Filter obs to yr/mo
-  spOcc_filter <- spOcc %>% 
-    filter(year == dates_df[i,1],
-           month == dates_df[i,3])
+## use fxn to extract env data at location of spp observations
+sppExtract_2000_2009 <- bcm_spp_extract(2000, 2009, path, sppOcc)
 
-  ## If filtered df has obs, then vectorize and extract.
-  if(nrow(spOcc_filter)>0) {
-      ## vectorize and reproj to env data crs
-      spOcc_vect <- spOcc_filter %>%
-        vect(geom = c("decimallongitude", "decimallatitude"), crs = "WGS84") %>%
-        project(y = crs(env_stack))
+## export df as csv
+write_csv(sppExtract_2000_2009, here('data/swd/2000_2009.csv'))
 
-      ## extract and tidy df
-      spExtract <- extract(env_stack, spOcc_vect, method = "simple") %>%
-        ## only keep first 3 chars of each column name
-        ## (e.g. "cwd2021jan" becomes "cwd")
-        rename_with(~substr(., 1, 3)) %>%
-        ## merge occ data w/extract data
-        cbind(spOcc_filter, .) %>%
-        dplyr::select(-ID)
 
-      ## append results to df
-      extract_df <- rbind(extract_df, spExtract)
-    
-    } else {
-    ## If no obs for a yr/mo, skip
-    next
-  }
+### 2010-2020 Extraction ----------------------------------------
+path <- here('data/bcmv8/2010_2020/')
 
-}
+sppExtract_2010_2020 <- bcm_spp_extract(2010, 2020, path, sppOcc)
+
+write_csv(sppExtract_2021_2022, here('data/swd/2021_2022.csv'))
+
+
+### 2021-2022 Extraction ----------------------------------------
+path <- here('data/bcmv8/2021_2022/')
+
+sppExtract_2021_2022 <- bcm_spp_extract(2021, 2022, path, sppOcc)
+
+write_csv(sppExtract_2021_2022, here('data/swd/2021_2022.csv'))
+
+
 ```
+
+
 
 
 
