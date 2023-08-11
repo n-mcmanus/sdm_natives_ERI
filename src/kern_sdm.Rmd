@@ -28,97 +28,101 @@ This script extracts environmental data for each species occurrence (based on lo
 
 ## Convert ASC to TIF
 
-Publicly available BCMv8 files are in .asc format. ASCII files have associated coordinates but usually do not have an explicitly defined CRS when read in as a raster. Additionally, .tif have smaller file sizes than .asc, so conversion saves on data storage. Use this code to convert an entire file of .asc files to .tif files with appropriate CRS. BCM data uses NAD83 CA Albers (EPSG:3310)
+Publicly available BCMv8 files are in .asc format. ASCII files have associated coordinates but usually do not have an explicitly defined CRS when read in as a raster. Additionally, .tif have smaller file sizes than .asc, so conversion saves on data storage. Use this code to convert an entire file of .asc files to .tif files with appropriate CRS. BCM data uses NAD83 CA Albers (EPSG:3310), so this is the default for the function.
 ```{r}
-## Assign file path (selects all .asc files in directory)
-file_asc <- list.files(path = here("data/bcmv8/2010_2020/"), 
-                   pattern='\\.asc$', 
-                   full=TRUE)
-## Saves files w/same name but as .tif
-file_tif <- gsub("\\.asc$", ".tif", file_asc)
-
-
-## Progress bar
-fileLength <- length(file_asc)
-pb <- txtProgressBar(min = 0,
-                     max = fileLength,
-                     style = 3,
-                     width = fileLength,
-                     char = "=")
-
-
-## Loop to read in .asc, add crs, then output .tif
-for (i in 1:fileLength) {
-    r <- rast(file_asc[i])
-    crs(r) <- "epsg: 3310"
-    writeRaster(r, file_tif[i])
-    
-    setTxtProgressBar(pb, i)
-}
-```
-
-```{r}
+## Read in fxn
 source(here('R/asc_to_tif.R'))
-filepath = here('data/bcmv8/test/')
+
+## Assign file path (selects all .asc files in directory)
+filepath = here('data/bcmv8/2021_2022/')
+
+## Run fxn
 asc_to_tif(filepath)
 ```
 
 
 
-## Extract environmental data
 
+## Extract environmental data
 
 Using BCMv8 rasters, we'll extract information for each species occurrence within the given timeframe. Outputs 
 
 ```{r}
-## Read in occ df
+## Read in fxn
+source(here('R/env_extract.R'))
+```
+
+### Occurrence extraction:
+```{r}
+## Read in species occurrence df
 sppOcc <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa.csv')) %>% 
   janitor::clean_names() %>% 
   dplyr::select(gbifid, decimallatitude, decimallongitude, month, year)
 
-## Read in fxn
-source(here('R/bcm_spp_extract.R'))
-```
 
-
-
-```{r}
 ### 2000-2009 Extraction ----------------------------------------
 ## select directory of env rasters
 path <- here('data/bcmv8/2000_2009/')
 
-## use fxn to extract env data at location of spp observations
-sppExtract_2000_2009 <- bcm_spp_extract(2000, 2009, path, sppOcc)
-
-## export df as csv
-write_csv(sppExtract_2000_2009, here('data/swd/2000_2009.csv'))
+## use fxn to extract env data at location of occurrences
+occExtract_2000_2009 <- env_extract(2000, 2009, path, sppOcc)
 
 
 ### 2010-2020 Extraction ----------------------------------------
 path <- here('data/bcmv8/2010_2020/')
 
-sppExtract_2010_2020 <- bcm_spp_extract(2010, 2020, path, sppOcc)
-
-write_csv(sppExtract_2021_2022, here('data/swd/2021_2022.csv'))
+occExtract_2010_2020 <- env_extract(2010, 2020, path, sppOcc)
 
 
 ### 2021-2022 Extraction ----------------------------------------
 path <- here('data/bcmv8/2021_2022/')
 
-sppExtract_2021_2022 <- bcm_spp_extract(2021, 2022, path, sppOcc)
-
-write_csv(sppExtract_2021_2022, here('data/swd/2021_2022.csv'))
+occExtract_2021_2022 <- env_extract(2021, 2022, path, sppOcc)
 
 
+### Merge and export --------------------------------------------
+occExtract_2000_2022 <- rbind(occExtract_2000_2009, occExtract_2010_2020, occExtract_2021_2022)
+write_csv(occExtract_2000_2022, here('data/swd/occExtract_2000_2022.csv'))
 ```
 
 
+### Background extraction:
+```{r}
+## Read in background df
+backOcc <- read_csv(here('data/species_occurrence_GBIF/background_points.csv')) %>% 
+  janitor::clean_names()
 
+
+### 2000-2009 Extraction ----------------------------------------
+path <- here('data/bcmv8/2000_2009/')
+
+backExtract_2000_2009 <- env_extract(2000, 2009, path, backOcc, lon = 'x', lat = 'y')
+
+
+### 2010-2020 Extraction ----------------------------------------
+path <- here('data/bcmv8/2010_2020/')
+
+backExtract_2010_2020 <- env_extract(2010, 2020, path, backOcc, lon = 'x', lat = 'y')
+
+
+### 2021-2022 Extraction ----------------------------------------
+path <- here('data/bcmv8/2021_2022/')
+
+backExtract_2021_2022 <- env_extract(2021, 2022, path, backOcc, lon = 'x', lat = 'y')
+
+
+### Merge and export --------------------------------------------
+backExtract_2000_2022 <- rbind(backExtract_2000_2009, backExtract_2010_2020, backExtract_2021_2022)
+write_csv(backExtract_2000_2022, here('data/swd/backExtract_2000_2022.csv'))
+```
 
 
 
 
 ## Maxent
 
+```{r}
+
+```
 
 
