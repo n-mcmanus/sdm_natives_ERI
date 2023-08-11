@@ -20,7 +20,7 @@
 #' @return dataframe with environmental values at point of species observation
 
 
-bcm_spp_extract <- function(startYear, endYear, filepath, sppOcc,
+env_extract <- function(startYear, endYear, filepath, sppOcc,
                        lon = "decimallongitude", lat = "decimallatitude", crs = "WGS84") {
   
   ## Create df for range of dates -----------------------------------------
