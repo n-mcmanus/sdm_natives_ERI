@@ -12,6 +12,9 @@ library(here)                 ## reading/writing data
 library(rgbif)                ## download GBIF data
 library(CoordinateCleaner)    ## filter/clean GBIF data
 library(terra)
+library(raster)
+library(enmSdmX)
+library(dismo)
 ```
 
 ## R Markdown
@@ -136,6 +139,7 @@ apoly_merge_sub <- apoly_merge %>%
 
 
 ```
+
 ```{r}
 parb_calf <- read_csv(here("data/p_arborea_calflora.csv")) %>% 
   janitor::clean_names()
@@ -176,6 +180,114 @@ test2 <- inner_join(parb_gbif2, parb_calf2)
 
 ## only 5 matching
 ```
+
+
+
+## Years of interest
+```{r}
+## filter to 2000-2022 water years
+num <- sppOcc %>% 
+  select(gbifid, species, decimallatitude, decimallongitude, month, year) %>% 
+  filter(year >= 2000 | (year == 1999 & month %in% c(10,11,12))) %>% 
+  filter(year <= 2022) %>% 
+  filter(!(year == 2022 & month %in% c(10, 11, 12)))
+```
+
+
+
+## Spatial Thinning
+BCMv8 data are available at 270m resolution. To avoid biasing the model to oversampled regions, only one occurrence per 270m pixel will be used for extraction.
+```{r}
+## Testing difference between fxns in two packages
+library(spThin)
+library(enmSdmX)
+
+sppOcc <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa.csv'))
+aet2020 <- rast(here('data/bcmv8/2021_2022/aet2020dec.tif')) %>% 
+  project(y = "WGS84")
+
+
+enmTest <- elimCellDuplicates(sppOcc, aet2020, longLat = c("decimallongitude", "decimallatitude")) %>% 
+  dplyr::select(c("decimallongitude", "decimallatitude")) %>% 
+  rename(Longitude = decimallongitude,
+         Latitude = decimallatitude)
+
+thinTest <- thin(
+  loc.data = sppOcc,
+  lat.col = "decimallatitude",
+  long.col = "decimallongitude",
+  spec.col = "species",
+  thin.par = 0.27,
+  reps = 1,
+  locs.thinned.list.return = T,
+  write.files = F,
+  out.dir = here('data/species_occurrence_GBIF/')
+  
+)
+
+
+diff <- setdiff(enmTest, thinTest)
+diff_vect <- diff %>% 
+  vect(geom = c("Longitude", "Latitude"), crs = "WGS84")
+writeVector(diff_vect, here('data/diff'))
+
+
+enmTest_vect <- enmTest %>%
+  vect(geom = c("decimallongitude", "decimallatitude"), crs = "WGS84")
+
+thinTest_vect <- thinTest %>% 
+  vect(geom = c("Longitude", "Latitude"), crs = "WGS84")
+
+
+
+
+
+
+
+writeVector(enmTest_vect, here('data/enmTest'))
+writeVector(thinTest_vect, here('data/thinTest'))
+
+```
+
+
+
+## Generate background points
+The sample with enmSdmX is faster and compatible with terra, but the dismo one has the option of inputting occurrence data and NOT sampling those points... which may be a useful feature. For now using the Dismo fxn. 
+```{r}
+## Using enmSdmX ------------------
+samp <- sampleRast(aet2020, 10560, prob = FALSE, replace = FALSE)
+
+samp <- as.data.frame(samp)
+
+samp_vect <- vect(samp, geom = c("x", "y"), crs = "WGS84")
+plot(samp_vect)
+
+
+## Using dismo ------------------------
+### convert to raster obj
+aet2020_r <- raster(aet2020)
+
+### random samples w/o replacement
+sampOcc <- randomPoints(aet2020_r, 11040, prob = FALSE)
+sampOcc <- as.data.frame(sampOcc)
+
+### confirm no two points in same pixel
+# test <- elimCellDuplicates(sampOcc, aet2020, longLat = c("x", "y"))
+
+### assign 40 pts to each mo/yr
+### first create df of mo/yr in wy format
+dates <- data.frame(year = rep(2000:2022, each = 480), 
+                    month = rep(1:12, each = 40))
+dates <- rbind(tail(dates, 120), head(dates, -120))
+dates[1:120, 1] = (dates[121,1] - 1)
+
+backSamp <- cbind(sampOcc, dates)
+
+### export as csv
+write_csv(backSamp, here('data/species_occurrence_GBIF/background_points.csv'))
+```
+
+
 
 
 
