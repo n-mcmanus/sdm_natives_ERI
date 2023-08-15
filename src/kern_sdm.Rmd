@@ -12,6 +12,7 @@ library(here)         ## reading/writing data
 library(terra)        ## Better/faster GIS
 library(raster)       ## GIS format required by Dismo
 library(dismo)        ## Maxent pkg
+library(rJava)        ## Needed for dismo
 library(lubridate)    ## Dates and progress bar
 ```
 
@@ -45,7 +46,7 @@ asc_to_tif(filepath)
 
 ## Extract environmental data
 
-Using BCMv8 rasters, we'll extract information for each species occurrence within the given timeframe. Outputs 
+Using BCMv8 rasters, we'll extract information for each species occurrence within the given time frame. BCMv8 files are usually zipped by decade. The output will be one CSV with environmental data for each point. 
 
 ```{r}
 ## Read in fxn
@@ -55,7 +56,7 @@ source(here('R/env_extract.R'))
 ### Occurrence extraction:
 ```{r}
 ## Read in species occurrence df
-sppOcc <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa.csv')) %>% 
+sppOcc <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa_thinned.csv')) %>% 
   janitor::clean_names() %>% 
   dplyr::select(gbifid, decimallatitude, decimallongitude, month, year)
 
@@ -119,10 +120,102 @@ write_csv(backExtract_2000_2022, here('data/swd/backExtract_2000_2022.csv'))
 
 
 
-## Maxent
+## Maxent Models
 
+Construct model using Samples with Data (SWD) method.
+
+
+### Input data
+
+Read in species occurrence and background data, then wrangle to put in proper format. The model will be run using two temperature predictors: mean temperature [(tmn + tmx)/2] and difference of temperature [tmx-tmn]. After these values are derived, both occurrence and background points will isolated by month and merged into one data frame per month .
 ```{r}
+## Occurrence data ----------------------------------------------------------
+swdOcc <- read_csv(here('data/swd/occExtract_2000_2022.csv')) %>% 
+  ## Add tmean, tdiff, and presence values
+  mutate(tmean = round((tmx+tmn)/2, 2),
+         tdiff = round(tmx-tmn, 2),
+         presence = 1) %>% 
+  ## remove select variables
+  dplyr::select(!c(gbifid, tmx, tmn)) %>%  
+  ## rename lon/lat cols
+  rename(x = decimallongitude,
+         y = decimallatitude)
 
+## rearrange x and y to match background df
+swdOcc <- swdOcc[, c(2, 1, 3:8)]
+
+
+## Background Data ----------------------------------------------------------
+swdBack <- read_csv(here('data/swd/backExtract_2000_2022.csv')) %>% 
+  mutate(tmean = round((tmx+tmn)/2, 2),
+         tdiff = round(tmx-tmn, 2),
+         presence = 0) %>% 
+  dplyr::select(!c(tmx, tmn))
+
+
+## Bind into one df and
+## remove any rows in NAs
+swd <- rbind(swdOcc, swdBack)
+swd <- swd[complete.cases(swd), ]
 ```
+
+### Model arguments
+```{r}
+## Select env variables (predictors) for model
+x <- swd %>% 
+  dplyr::select(aet, tmean, tdiff)
+
+## Arguments/options to pass to Maxent()
+args <- c("-J", "-A", "-P", "replicates=5", "replicatetype=crossvalidate")
+
+## Path to save results
+path <- here('data/maxent_outputs/')
+
+## Now run this part to finish up the data work:
+p <- swd %>% 
+  dplyr::select(presence)
+```
+
+### Model fitting
+```{r}
+testModel <- maxent(x,
+                        p,
+                        path=path,
+                        args=args,
+                        removeDuplicates = TRUE)
+```
+
+
+### Final model
+```{r}
+#Final Model Settings
+#Select Predictors to use
+## Select env variables (predictors) for model
+x <- swd %>% 
+  dplyr::select(aet, tmean, tdiff)
+
+
+#Set Arguments/Options to Pass to Maxent
+args <- c("-J", "-A", "-P", "maximumiterations=100000", "writeplotdata=TRUE")
+
+#Set Path to Save Results
+path <- here('data/maxent_outputs')
+
+#Run this last bit to finalize options
+p <- swd %>% 
+  dplyr::select(presence)
+
+#Final Model Creation
+
+testFinal <- maxent(x,
+                      p,
+                      path=path,
+                      args=args
+                        )
+
+save(AnnualFinal_NLCD, file = "Results/AnnualModelFinal_NLCD/Model.rData")
+```
+
+
 
 
