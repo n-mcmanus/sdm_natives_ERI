@@ -14,10 +14,11 @@ library(CoordinateCleaner)    ## filter/clean GBIF data
 library(terra)
 library(raster)
 library(enmSdmX)
+library(spThin)
 library(dismo)
 ```
 
-## R Markdown
+## Download Occurrence Data
 
 This script uses the `rgbif` package to directly download species occurence data from GBIF. To use the `occ_download()` function, this requires setting your GBIF login details. Details on how to set this can be found at: https://docs.ropensci.org/rgbif/articles/gbif_credentials.html
 
@@ -183,69 +184,76 @@ test2 <- inner_join(parb_gbif2, parb_calf2)
 
 
 
-## Years of interest
+## Spatial and Temporal Thinning
+
+BCMv8 data are available at 270m resolution. To avoid biasing the model to oversampled regions, only one occurrence per 270m pixel will be used for extraction. Additionally, we are only interested in species occurrences in the water years 2000-2022. We'll thin and filter the data to be used in the SDM model. 
 ```{r}
-## filter to 2000-2022 water years
-num <- sppOcc %>% 
-  select(gbifid, species, decimallatitude, decimallongitude, month, year) %>% 
-  filter(year >= 2000 | (year == 1999 & month %in% c(10,11,12))) %>% 
-  filter(year <= 2022) %>% 
-  filter(!(year == 2022 & month %in% c(10, 11, 12)))
-```
-
-
-
-## Spatial Thinning
-BCMv8 data are available at 270m resolution. To avoid biasing the model to oversampled regions, only one occurrence per 270m pixel will be used for extraction.
-```{r}
-## Testing difference between fxns in two packages
-library(spThin)
-library(enmSdmX)
-
+## Read in species occurrence data
 sppOcc <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa.csv'))
+## Read in reference raster
 aet2020 <- rast(here('data/bcmv8/2021_2022/aet2020dec.tif')) %>% 
   project(y = "WGS84")
 
+## Testing enmSdmX -----------------------------------------
 
-enmTest <- elimCellDuplicates(sppOcc, aet2020, longLat = c("decimallongitude", "decimallatitude")) %>% 
-  dplyr::select(c("decimallongitude", "decimallatitude")) %>% 
-  rename(Longitude = decimallongitude,
-         Latitude = decimallatitude)
+## thin data to one pt per raster cell (270m)
+sppThin <- elimCellDuplicates(sppOcc, aet2020, longLat = c("decimallongitude", "decimallatitude"))
+  # dplyr::select(c("decimallongitude", "decimallatitude")) %>% 
+  # rename(Longitude = decimallongitude,
+  #        Latitude = decimallatitude)
 
-thinTest <- thin(
-  loc.data = sppOcc,
-  lat.col = "decimallatitude",
-  long.col = "decimallongitude",
-  spec.col = "species",
-  thin.par = 0.27,
-  reps = 1,
-  locs.thinned.list.return = T,
-  write.files = F,
-  out.dir = here('data/species_occurrence_GBIF/')
-  
-)
-
-
-diff <- setdiff(enmTest, thinTest)
-diff_vect <- diff %>% 
-  vect(geom = c("Longitude", "Latitude"), crs = "WGS84")
-writeVector(diff_vect, here('data/diff'))
+## Now filter to water years of interest
+sppThin_2000_2022 <- sppThin %>% 
+  ## only keep vars of interest
+  dplyr::select(gbifid, species, month, year, 
+                decimallatitude, decimallongitude) %>% 
+  ## Keep Oct 1999 through Sep 2022
+  filter(year >= 2000 | (year == 1999 & month %in% c(10,11,12))) %>% 
+  filter(year <= 2022) %>% 
+  filter(!(year == 2022 & month %in% c(10, 11, 12)))
 
 
-enmTest_vect <- enmTest %>%
-  vect(geom = c("decimallongitude", "decimallatitude"), crs = "WGS84")
-
-thinTest_vect <- thinTest %>% 
-  vect(geom = c("Longitude", "Latitude"), crs = "WGS84")
-
-
+# ## Double-check no duplicate points!
+# test <- sppThin_2000_2022 %>%
+#   group_by(decimallatitude) %>%
+#   group_by(decimallongitude) %>%
+#   distinct(decimallatitude, decimallongitude, .keep_all = T)
 
 
+## Save 
+write_csv(sppThin_2000_2022,
+          here('data/species_occurrence_GBIF/a_polycarpa_thinned.csv'))
+
+## Testing spThin -----------------------------------------
+# thinTest <- thin(
+#   loc.data = sppOcc,
+#   lat.col = "decimallatitude",
+#   long.col = "decimallongitude",
+#   spec.col = "species",
+#   thin.par = 0.27,
+#   reps = 1,
+#   locs.thinned.list.return = F,
+#   write.files = T,
+#   out.dir = here('data/species_occurrence_GBIF/')
+#   
+# )
+# thinned <- as.data.frame(thinTest)
+# 
+# diff <- setdiff(enmTest, thinTest)
+# diff_vect <- diff %>% 
+#   vect(geom = c("Longitude", "Latitude"), crs = "WGS84")
+# writeVector(diff_vect, here('data/diff'))
+# 
+# 
+# enmTest_vect <- enmTest %>%
+#   vect(geom = c("decimallongitude", "decimallatitude"), crs = "WGS84")
+# 
+# thinTest_vect <- thinTest %>% 
+#   vect(geom = c("Longitude", "Latitude"), crs = "WGS84")
 
 
-
-writeVector(enmTest_vect, here('data/enmTest'))
-writeVector(thinTest_vect, here('data/thinTest'))
+# writeVector(enmTest_vect, here('data/enmTest'))
+# writeVector(thinTest_vect, here('data/thinTest'))
 
 ```
 
@@ -254,21 +262,30 @@ writeVector(thinTest_vect, here('data/thinTest'))
 ## Generate background points
 The sample with enmSdmX is faster and compatible with terra, but the dismo one has the option of inputting occurrence data and NOT sampling those points... which may be a useful feature. For now using the Dismo fxn. 
 ```{r}
-## Using enmSdmX ------------------
-samp <- sampleRast(aet2020, 10560, prob = FALSE, replace = FALSE)
+### Set up data inputs ----------------------------------------------
+## Read in presence data, only keep coords
+pres <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa_thinned.csv')) %>% 
+  dplyr::select(decimallatitude, decimallongitude) %>% 
+  rename(x = decimallongitude,
+         y = decimallatitude)
 
-samp <- as.data.frame(samp)
+## Getting weird error in dismo::randomPoints
+## Have to explicitly extablish values as dbl in a df
+pres$y = as.numeric(pres$y)
+pres$x = as.numeric(pres$x)
+pres <- as.data.frame(pres)
 
-samp_vect <- vect(samp, geom = c("x", "y"), crs = "WGS84")
-plot(samp_vect)
+## Read in reference raster
+aet2020_r <- raster(here('data/bcmv8/2021_2022/aet2020dec.tif')) 
+raster::crs(aet2020_r) <- "EPSG: 4326"
 
-
-## Using dismo ------------------------
-### convert to raster obj
-aet2020_r <- raster(aet2020)
-
-### random samples w/o replacement
-sampOcc <- randomPoints(aet2020_r, 11040, prob = FALSE)
+### Create random background points --------------------------------------
+## Random samples w/o replacement
+## ensure pts aren't in same cell as presence data 
+sampOcc <- randomPoints(mask = aet2020_r, 
+                        p = pres,
+                        n = 11040,  
+                        prob = FALSE)
 sampOcc <- as.data.frame(sampOcc)
 
 ### confirm no two points in same pixel
@@ -276,10 +293,10 @@ sampOcc <- as.data.frame(sampOcc)
 
 ### assign 40 pts to each mo/yr
 ### first create df of mo/yr in wy format
-dates <- data.frame(year = rep(2000:2022, each = 480), 
-                    month = rep(1:12, each = 40))
+dates <- data.frame(month = rep(1:12, each = 40),
+                    year = rep(2000:2022, each = 480))
 dates <- rbind(tail(dates, 120), head(dates, -120))
-dates[1:120, 1] = (dates[121,1] - 1)
+dates[1:120, 2] = (dates[121,2] - 1)
 
 backSamp <- cbind(sampOcc, dates)
 
