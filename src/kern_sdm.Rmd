@@ -157,12 +157,14 @@ swdBack <- read_csv(here('data/swd/backExtract_2000_2022.csv')) %>%
 ## remove any rows in NAs
 swd <- rbind(swdOcc, swdBack)
 swd <- swd[complete.cases(swd), ]
+
+write_csv(swd, here('data/swd/swd_2000_2022.csv'))
 ```
 
 ### Model arguments
 ```{r}
 ## Select env variables (predictors) for model
-x <- swd %>% 
+x <- read_csv(here('data/swd/swd_2000_2022.csv')) %>% 
   dplyr::select(aet, tmean, tdiff)
 
 ## Arguments/options to pass to Maxent()
@@ -178,44 +180,72 @@ p <- swd %>%
 
 ### Model fitting
 ```{r}
-testModel <- maxent(x,
-                        p,
-                        path=path,
-                        args=args,
-                        removeDuplicates = TRUE)
+testModel <- maxent(x, p, path=path, args=args, removeDuplicates = TRUE)
 ```
 
 
 ### Final model
 ```{r}
-#Final Model Settings
-#Select Predictors to use
-## Select env variables (predictors) for model
-x <- swd %>% 
-  dplyr::select(aet, tmean, tdiff)
-
-
 #Set Arguments/Options to Pass to Maxent
 args <- c("-J", "-A", "-P", "maximumiterations=100000", "writeplotdata=TRUE")
 
-#Set Path to Save Results
-path <- here('data/maxent_outputs')
-
-#Run this last bit to finalize options
-p <- swd %>% 
-  dplyr::select(presence)
 
 #Final Model Creation
+testFinal <- maxent(x, p, path=path, args=args)
 
-testFinal <- maxent(x,
-                      p,
-                      path=path,
-                      args=args
-                        )
-
-save(AnnualFinal_NLCD, file = "Results/AnnualModelFinal_NLCD/Model.rData")
+save(testFinal, file = here("data/maxent_outputs/testFinal.rData"))
 ```
 
 
 
+## Predictions
+
+Testing out prediction maps using only one year of monthly env data. Will likely need to create a function that averages all of the data by month....
+```{r}
+## Data pathways
+path_env <- here('data/bcmv8/2021_2022//')
+path_pred <- here('data/maxent_outputs//')
+
+## Function ------------------------------------------------------------------
+pred_month <- function(year, month, model, path_env, path_pred) {
+  ## read in rasters (masking/math faster in terra)
+  aet <- terra::rast(paste0(path_env, 'aet', year, month, '.tif'))
+  tmn <- terra::rast(paste0(path_env, 'tmn', year, month, '.tif')) %>% 
+    terra::mask(., aet)
+  tmx <- terra::rast(paste0(path_env, 'tmx', year, month, '.tif')) %>% 
+    terra::mask(., aet)
+  
+  ## Find temp mean and difference
+  tmean <- (tmx+tmn)/2
+  tdiff <- tmx-tmn
+  
+  ## Convert to rasterLayers, stack, and name layers
+  aet <- raster(aet)
+  tmean <- raster(tmean)
+  tdiff <- raster(tdiff)
+  
+  stack <- raster::stack(aet, tmean, tdiff)
+  names(stack) <- c('aet','tmean','tdiff')
+  
+  ## Predict spp presence with model, then save raster
+  pred <- dismo::predict(model, stack)
+  writeRaster(pred, paste0(path_pred, month, '.tif'))
+}
+
+## Get predictions for each month ---------------------------------------------
+pred_oct <- pred_month('2020', 'oct', model = testFinal, path_env, path_pred)
+pred_nov <- pred_month('2020', 'nov', model = testFinal, path_env, path_pred)
+pred_dec <- pred_month('2020', 'dec', model = testFinal, path_env, path_pred)
+pred_jan <- pred_month('2021', 'jan', model = testFinal, path_env, path_pred)
+pred_feb <- pred_month('2021', 'feb', model = testFinal, path_env, path_pred)
+pred_mar <- pred_month('2021', 'mar', model = testFinal, path_env, path_pred)
+pred_apr <- pred_month('2021', 'apr', model = testFinal, path_env, path_pred)
+pred_may <- pred_month('2021', 'may', model = testFinal, path_env, path_pred)
+pred_jun <- pred_month('2021', 'jun', model = testFinal, path_env, path_pred)
+pred_jul <- pred_month('2021', 'jul', model = testFinal, path_env, path_pred)
+pred_aug <- pred_month('2021', 'aug', model = testFinal, path_env, path_pred)
+pred_sep <- pred_month('2021', 'sep', model = testFinal, path_env, path_pred)
+
+
+```
 
