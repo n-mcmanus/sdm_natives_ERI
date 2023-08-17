@@ -20,8 +20,6 @@ library(dismo)
 
 ## Download Occurrence Data
 
-test thing here!
-
 This script uses the `rgbif` package to directly download species occurence data from GBIF. To use the `occ_download()` function, this requires setting your GBIF login details. Details on how to set this can be found at: https://docs.ropensci.org/rgbif/articles/gbif_credentials.html
 
 ```{r}
