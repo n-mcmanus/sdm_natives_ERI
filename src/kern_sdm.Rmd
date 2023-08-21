@@ -168,7 +168,14 @@ x <- read_csv(here('data/swd/swd_2000_2022.csv')) %>%
   dplyr::select(aet, tmean, tdiff)
 
 ## Arguments/options to pass to Maxent()
-args <- c("-J", "-A", "-P", "replicates=5", "replicatetype=crossvalidate")
+args <- c('jackknife=TRUE', 
+          'autofeature=TRUE', 
+          'responsecurves=TRUE', 
+          'linear=TRUE',
+          'quadratic=TRUE',
+          'threshold=TRUE',
+          'hinge=FALSE',
+          'replicates=5', 'replicatetype=crossvalidate')
 
 ## Path to save results
 path <- here('data/maxent_outputs/')
@@ -187,7 +194,15 @@ testModel <- maxent(x, p, path=path, args=args, removeDuplicates = TRUE)
 ### Final model
 ```{r}
 #Set Arguments/Options to Pass to Maxent
-args <- c("-J", "-A", "-P", "maximumiterations=100000", "writeplotdata=TRUE")
+args <- c('jackknife=TRUE', 
+          'autofeature=TRUE', 
+          'responsecurves=TRUE', 
+          'linear=TRUE',
+          'quadratic=TRUE',
+          'threshold=TRUE',
+          'hinge=FALSE', 
+          'maximumiterations=100000', 
+          'writeplotdata=TRUE')
 
 
 #Final Model Creation
@@ -199,6 +214,52 @@ save(testFinal, file = here("data/maxent_outputs/testFinal.rData"))
 
 
 ## Predictions
+
+```{r}
+## function to avg all env rasters
+## TESTING 
+startYear = 2000
+endYear = 2022
+
+# names <- data.frame(variable = rep(c('aet', 'tmin', 'tmx'), each = 12),
+#                        month = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
+#                                  'jul', 'aug', 'sep', 'oct', 'nov', 'dec'))
+
+names <- data.frame(variable = rep('aet', each = 12),
+                       month = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                                 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'))
+
+pathIn = here('data/bcmv8/2021_2022//')
+pathOut = here('data/bcmv8//')
+
+env_avg <- function(variable, month, pathIn, pathOut) {
+  ## Read in all files for that var/mo
+  files <- list.files(path = pathIn, 
+                      ## only list those with matching yr/mo in name
+                      pattern = paste0(variable, ".+", month),
+                      full=TRUE)
+  
+  env_stack <- terra::rast(c(files))
+  
+  ## Average all rasts in stack
+  env_avg <- terra::app(env_stack, fun = 'mean')
+  
+  ## Save
+  writeRaster(env_avg, 
+              paste0(pathOut, variable, "_", month, "_avg.tif"), 
+              overwrite = TRUE)
+  
+}
+
+env_avg(variable = names$variable[2],
+        month = names$month[2],
+        pathIn = names$pathIn[2],
+        pathOut = names$pathOut[2])
+
+purrr::pmap(names, env_avg, pathIn, pathOut, .progress = TRUE)
+```
+
+
 
 Testing out prediction maps using only one year of monthly env data. Will likely need to create a function that averages all of the data by month....
 ```{r}
@@ -229,7 +290,7 @@ pred_month <- function(year, month, model, path_env, path_pred) {
   
   ## Predict spp presence with model, then save raster
   pred <- dismo::predict(model, stack)
-  writeRaster(pred, paste0(path_pred, month, '.tif'))
+  writeRaster(pred, paste0(path_pred, month, '.tif'), overwrite=TRUE)
 }
 
 ## Get predictions for each month ---------------------------------------------
@@ -247,5 +308,39 @@ pred_aug <- pred_month('2021', 'aug', model = testFinal, path_env, path_pred)
 pred_sep <- pred_month('2021', 'sep', model = testFinal, path_env, path_pred)
 
 
+
 ```
+
+
+
+## Response Curves
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
