@@ -9,6 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)    ## always
 library(here)         ## reading/writing data
+library(purrr)        ## run iterative fxns
 library(terra)        ## Better/faster GIS
 library(raster)       ## GIS format required by Dismo
 library(dismo)        ## Maxent pkg
@@ -215,53 +216,20 @@ save(testFinal, file = here("data/maxent_outputs/testFinal.rData"))
 
 ## Predictions
 
+Now, we want to project the Maxent model predictions for each month to determine how suitability changes during the year. To do this, we'll first need to create rasters of average monthly values for each environmental variable used:
 ```{r}
 ## function to avg all env rasters
-## TESTING 
-startYear = 2000
-endYear = 2022
+source(here('R/env_avg.R'))
 
-# names <- data.frame(variable = rep(c('aet', 'tmin', 'tmx'), each = 12),
-#                        month = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
-#                                  'jul', 'aug', 'sep', 'oct', 'nov', 'dec'))
-
-names <- data.frame(variable = rep('aet', each = 12),
-                       month = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
-                                 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'))
-
-pathIn = here('data/bcmv8/2021_2022//')
-pathOut = here('data/bcmv8//')
-
-env_avg <- function(variable, month, pathIn, pathOut) {
-  ## Read in all files for that var/mo
-  files <- list.files(path = pathIn, 
-                      ## only list those with matching yr/mo in name
-                      pattern = paste0(variable, ".+", month),
-                      full=TRUE)
-  
-  env_stack <- terra::rast(c(files))
-  
-  ## Average all rasts in stack
-  env_avg <- terra::app(env_stack, fun = 'mean')
-  
-  ## Save
-  writeRaster(env_avg, 
-              paste0(pathOut, variable, "_", month, "_avg.tif"), 
-              overwrite = TRUE)
-  
-}
-
-env_avg(variable = names$variable[2],
-        month = names$month[2],
-        pathIn = names$pathIn[2],
-        pathOut = names$pathOut[2])
-
-purrr::pmap(names, env_avg, pathIn, pathOut, .progress = TRUE)
+## Run fxn (may take a while)
+env_avg(var_names = c('aet','tmn','tmx'),
+        pathIn = here('data/bcmv8/2021_2022//'),
+        pathOut = here('data/bcmv8//'))
 ```
 
 
 
-Testing out prediction maps using only one year of monthly env data. Will likely need to create a function that averages all of the data by month....
+Testing out prediction maps using only one year of monthly env data. 
 ```{r}
 ## Data pathways
 path_env <- here('data/bcmv8/2021_2022//')
