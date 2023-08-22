@@ -197,10 +197,10 @@ aet2020 <- rast(here('data/bcmv8/2021_2022/aet2020dec.tif')) %>%
 ## Testing enmSdmX -----------------------------------------
 
 ## thin data to one pt per raster cell (270m)
-sppThin <- elimCellDuplicates(sppOcc, aet2020, longLat = c("decimallongitude", "decimallatitude"))
-  # dplyr::select(c("decimallongitude", "decimallatitude")) %>% 
-  # rename(Longitude = decimallongitude,
-  #        Latitude = decimallatitude)
+sppThin <- elimCellDuplicates(sppOcc, aet2020, longLat = c("decimallongitude", "decimallatitude")) %>% 
+  dplyr::select(c("decimallongitude", "decimallatitude")) %>%
+  rename(Longitude = decimallongitude,
+         Latitude = decimallatitude)
 
 ## Now filter to water years of interest
 sppThin_2000_2022 <- sppThin %>% 
@@ -232,23 +232,23 @@ write_csv(sppThin_2000_2022,
 #   spec.col = "species",
 #   thin.par = 0.27,
 #   reps = 1,
-#   locs.thinned.list.return = F,
-#   write.files = T,
-#   out.dir = here('data/species_occurrence_GBIF/')
-#   
+#   locs.thinned.list.return = T,
+#   write.files = F
+#   # out.dir = here('data/species_occurrence_GBIF/')
+# 
 # )
 # thinned <- as.data.frame(thinTest)
-# 
-# diff <- setdiff(enmTest, thinTest)
-# diff_vect <- diff %>% 
+# #
+# diff <- setdiff(sppThin, thinned)
+# diff_vect <- diff %>%
 #   vect(geom = c("Longitude", "Latitude"), crs = "WGS84")
 # writeVector(diff_vect, here('data/diff'))
-# 
-# 
-# enmTest_vect <- enmTest %>%
+# #
+# #
+# enmTest_vect <- sppThin %>%
 #   vect(geom = c("decimallongitude", "decimallatitude"), crs = "WGS84")
 # 
-# thinTest_vect <- thinTest %>% 
+# thinTest_vect <- thinned %>%
 #   vect(geom = c("Longitude", "Latitude"), crs = "WGS84")
 
 
@@ -263,27 +263,26 @@ write_csv(sppThin_2000_2022,
 The sample with enmSdmX is faster and compatible with terra, but the dismo one has the option of inputting occurrence data and NOT sampling those points... which may be a useful feature. For now using the Dismo fxn. 
 ```{r}
 ### Set up data inputs ----------------------------------------------
-## Read in presence data, only keep coords
-pres <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa_thinned.csv')) %>% 
-  dplyr::select(decimallatitude, decimallongitude) %>% 
-  rename(x = decimallongitude,
-         y = decimallatitude)
+## Commented out code for presence data...
+# pres <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa_thinned.csv')) %>% 
+#   dplyr::select(decimallatitude, decimallongitude) %>% 
+#   rename(x = decimallongitude,
+#          y = decimallatitude)
+# ## Getting weird error in dismo::randomPoints
+# ## Have to explicitly extablish values as dbl in a df
+# pres$y = as.numeric(pres$y)
+# pres$x = as.numeric(pres$x)
+# pres <- as.data.frame(pres)
 
-## Getting weird error in dismo::randomPoints
-## Have to explicitly extablish values as dbl in a df
-pres$y = as.numeric(pres$y)
-pres$x = as.numeric(pres$x)
-pres <- as.data.frame(pres)
-
-## Read in reference raster
-aet2020_r <- raster(here('data/bcmv8/2021_2022/aet2020dec.tif')) 
-raster::crs(aet2020_r) <- "EPSG: 4326"
+## Read in reference raster and make RasterLayer obj
+aet2020 <- rast(here('data/bcmv8/2021_2022/aet2020dec.tif')) %>% 
+  project(y = "WGS84")
+aet2020_r <- raster(aet2020)
 
 ### Create random background points --------------------------------------
 ## Random samples w/o replacement
 ## ensure pts aren't in same cell as presence data 
 sampOcc <- randomPoints(mask = aet2020_r, 
-                        p = pres,
                         n = 11040,  
                         prob = FALSE)
 sampOcc <- as.data.frame(sampOcc)
