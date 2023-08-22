@@ -193,10 +193,10 @@ Now, we want to project the Maxent model predictions for each month to determine
 ### Average monthly environmental data:
 First we need to create rasters representing the monthly average for each predictor variable used in the model.
 ```{r}
-## function to avg all env rasters
+## Read in fxn
 source(here('R/env_avg.R'))
 
-## Run fxn (may take a while)
+## Run fxn (shows progress bar)
 env_avg(var_names = c('aet','tmn','tmx'),
         pathIn = here('data/bcmv8/2000_2022//'),
         pathOut = here('data/bcmv8/monthly_avgs//'))
@@ -206,57 +206,13 @@ env_avg(var_names = c('aet','tmn','tmx'),
 ### Run by month:
 Testing out prediction maps using only one year of monthly env data. 
 ```{r}
-###############TEST#########################
-## Data pathways
-pathEnv <- here('data/bcmv8/monthly_avgs//')
-pathPred <- here('data/maxent_outputs//')
-var_names <- c('aet','tmn','tmx')
+## Read in fxn
+source(here('R/pred_month.R'))
 
- ## Create df for variables to avg  -----------------------------------------
-  months <- data.frame(month = c('jan', 'feb'))
-
-## Function ------------------------------------------------------------------
-pred_month <- function(model, months, pathEnv, pathPred) {
-  ## Read each variable and mask to AET
-  aetFile <- list.files(path = pathEnv,
-                         pattern = paste0("aet", ".+", months),
-                         full = TRUE)
-  aet <- terra::rast((aetFile))
-  
-  tmnFile <- list.files(path = pathEnv,
-                        patter = paste0("tmn",".+", months),
-                        full = TRUE)
-  tmn <- terra::rast(tmnFile) %>% 
-    terra::mask(., aet)
-  
-  tmxFile <- list.files(path = pathEnv,
-                        patter = paste0("tmx",".+", months),
-                        full = TRUE)
-  tmx <- terra::rast(tmxFile)  %>% 
-    terra::mask(., aet)
-  
-  ## Find temp mean and difference
-  tmean <- (tmx+tmn)/2
-  tdiff <- tmx-tmn
-  
-  ## Convert to rasterLayers, stack, and name layers
-  aet <- raster(aet)
-  tmean <- raster(tmean)
-  tdiff <- raster(tdiff)
-  
-  stack <- raster::stack(aet, tmean, tdiff)
-  names(stack) <- c('aet','tmean','tdiff')
-  
-  ## Predict spp presence with model, then save raster
-  pred <- dismo::predict(model, stack)
-  writeRaster(pred, paste0(pathPred, months, '_pred.tif'), overwrite=TRUE)
-}
-
-
-
-### Iterate avg fxn over list of vars/months
-  purrr::pmap(months, pred_month, model = testFinal, pathEnv, pathPred, .progress = TRUE)
-
+## Run fxn (shows progress bar)
+pred_month(model = testFinal,
+           pathIn = here('data/bcmv8/monthly_avgs//'),
+           pathOut = here('data/maxent_outputs//'))
 ```
 
 
