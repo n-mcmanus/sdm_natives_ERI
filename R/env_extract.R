@@ -13,11 +13,11 @@
 #' @param startYear first water year in dataset
 #' @param endYear last water year in dataset
 #' @param filepath path to directory with env data rasters
-#' @param sppOcc dataframe with species occurrences for extraction
-#' @param lon column name for longitude values in spp occurrence dataframe (as character; default = "decimallongitude")
-#' @param lat column name for the latitude values in spp occurrence dataframe (as character; default = "decimallatitude")
+#' @param sppOcc data frame with species occurrences (or background points) for extraction
+#' @param lon column name for longitude values in sppOcc dataframe (as character; default = "decimallongitude")
+#' @param lat column name for the latitude values in sppOcc dataframe (as character; default = "decimallatitude")
 #' @param crs The coordinate reference system of the spp occurrence data (as character; default = "WGS84")
-#' @return dataframe with environmental values at point of species observation
+#' @return data frame with environmental values at point of species observation
 
 
 env_extract <- function(startYear, endYear, filepath, sppOcc,
@@ -30,7 +30,6 @@ env_extract <- function(startYear, endYear, filepath, sppOcc,
                          mon = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
                                  'jul', 'aug', 'sep', 'oct', 'nov', 'dec'),
                          mon_num = seq(1, 12, 1))
- 
   ## Rearrange to water year format
   ## Put Oct-Dec at start, then adjust calendar year
   dates_df <- rbind(tail(dates_df, 3), head(dates_df, -3))
