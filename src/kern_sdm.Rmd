@@ -15,6 +15,7 @@ library(raster)       ## GIS format required by Dismo
 library(dismo)        ## Maxent pkg
 library(rJava)        ## Needed for dismo
 library(lubridate)    ## Dates and progress bar
+library(corrplot)     ## Correlation matrix
 ```
 
 
@@ -25,6 +26,40 @@ This script extracts environmental data for each species occurrence (based on lo
 *   Species occurrence data was pulled from GBIF (and maybe CalFlora?) and filtered to return reasonably accurate presence-only data in California. The script for this is in "src" directory.
 
 *   Environmental data comes from the Basin Characterization Model version 8.0 (Flint et al., 2021) hosted by USGS. 
+
+
+
+
+
+
+## Correlation ############
+
+May move this section to another script...
+
+Assessing the correlation between environmental variables for SDM. Then generating a Pearson correlation matrix.
+
+```{r}
+vars1 <- swd %>% 
+  filter(presence == 1) %>% 
+  dplyr::select(aet:tdiff)
+vars2 <- occExtract_2000_2022 %>% 
+  filter(!is.na(aet)) %>% 
+  dplyr::select(tmn, tmx)
+vars <- cbind(vars1, vars2)
+
+M = cor(vars)
+
+corrplot(M, method = 'number')
+```
+
+
+
+
+
+
+
+
+
 
 
 
@@ -134,11 +169,18 @@ swd <- swd[complete.cases(swd), ]
 write_csv(swd, here('data/swd/swd_2000_2022.csv'))
 ```
 
-### Model arguments
+### Model fitting
 ```{r}
-## Select env variables (predictors) for model
-x <- read_csv(here('data/swd/swd_2000_2022.csv')) %>% 
+## Read in all points
+swd <- read_csv(here('data/swd/swd_2000_2022.csv'))
+
+## Select env predictors for model (presence + background)
+x <- swd %>% 
   dplyr::select(aet, tmean, tdiff)
+
+## Specify occurrence data
+p <- swd %>% 
+  dplyr::select(presence)
 
 ## Arguments/options to pass to Maxent()
 args <- c('jackknife=TRUE', 
@@ -146,42 +188,52 @@ args <- c('jackknife=TRUE',
           'responsecurves=TRUE', 
           'linear=TRUE',
           'quadratic=TRUE',
-          'threshold=TRUE',
+          'threshold=FALSE',
           'hinge=FALSE',
           'replicates=5', 'replicatetype=crossvalidate')
 
 ## Path to save results
-path <- here('data/maxent_outputs/')
+path <- here('data/maxent_outputs/fitting/')
 
-## Now run this part to finish up the data work:
-p <- swd %>% 
-  dplyr::select(presence)
-```
 
-### Model fitting
-```{r}
+
+## Run test model
 testModel <- maxent(x, p, path=path, args=args, removeDuplicates = TRUE)
 ```
 
 
 ### Final model
 ```{r}
-#Set Arguments/Options to Pass to Maxent
+## Read in all points
+swd <- read_csv(here('data/swd/swd_2000_2022.csv'))
+
+## Select env predictors for model (presence + background)
+x <- swd %>% 
+  dplyr::select(aet, tmean, tdiff)
+
+## Specify occurrence data
+p <- swd %>% 
+  dplyr::select(presence)
+
+## Set Arguments/Options to Pass to Maxent
 args <- c('jackknife=TRUE', 
           'autofeature=TRUE', 
           'responsecurves=TRUE', 
           'linear=TRUE',
           'quadratic=TRUE',
-          'threshold=TRUE',
+          'threshold=FALSE',
           'hinge=FALSE', 
           'maximumiterations=100000', 
           'writeplotdata=TRUE')
 
+## Path to save results
+path <- here('data/maxent_outputs/final/')
 
 #Final Model Creation
 testFinal <- maxent(x, p, path=path, args=args)
 
-save(testFinal, file = here("data/maxent_outputs/testFinal.rData"))
+
+save(testFinal, file = here("data/maxent_outputs/final/Model.rData"))
 ```
 
 
@@ -190,7 +242,9 @@ save(testFinal, file = here("data/maxent_outputs/testFinal.rData"))
 
 Now, we want to project the Maxent model predictions for each month to determine how suitability changes during the year. 
 
+
 ### Average monthly environmental data:
+
 First we need to create rasters representing the monthly average for each predictor variable used in the model.
 ```{r}
 ## Read in fxn
@@ -204,15 +258,19 @@ env_avg(var_names = c('aet','tmn','tmx'),
 
 
 ### Run by month:
+
 Testing out prediction maps using only one year of monthly env data. 
 ```{r}
 ## Read in fxn
 source(here('R/pred_month.R'))
 
+## Read in Maxent model
+load(here('data/maxent_outputs/final/Model.rData'))
+
 ## Run fxn (shows progress bar)
 pred_month(model = testFinal,
            pathIn = here('data/bcmv8/monthly_avgs//'),
-           pathOut = here('data/maxent_outputs//'))
+           pathOut = here('data/maxent_outputs/predictions//'))
 ```
 
 
