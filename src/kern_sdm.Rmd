@@ -245,7 +245,7 @@ First we need to create rasters representing the monthly average for each predic
 source(here('R/env_avg.R'))
 
 ## Run fxn (shows progress bar)
-env_avg(var_names = c('ppt'),
+env_avg(var_names = c('aet', 'ppt', 'tmn', 'tmx'),
         pathIn = here('data/bcmv8/2000_2022//'),
         pathOut = here('data/bcmv8/monthly_avgs//'))
 ```
@@ -254,7 +254,21 @@ env_avg(var_names = c('ppt'),
 ### Run by month:
 
 Testing out prediction maps using only one year of monthly env data. 
+NOTE; testing out how to make this fxn work with user defined name/amount of variables w/o having to manually change the function... will think more on later.
 ```{r}
+variables = c('aet', 'ppt', 'tmn', 'tmx')
+df <- as.data.frame(variables) %>% 
+  mutate(varNum = seq(1:length(variables))) %>% 
+  pivot_wider(names_from = varNum, names_prefix = "var", values_from = variables) %>% 
+  slice(rep(1:n(), each = 12)) %>% 
+  mutate(month = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                   'jul', 'aug', 'sep', 'oct', 'nov', 'dec'))
+
+
+
+
+
+
 ## Read in fxn
 source(here('R/pred_month.R'))
 
