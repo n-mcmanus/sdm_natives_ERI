@@ -102,12 +102,15 @@ Assessing the correlation between environmental variables for SDM. Then generati
 testOcc <- read_csv(here('data/swd/occExtract_2000_2022.csv')) %>% 
   mutate(tmean = (tmx+tmn)/2,
          tdiff = tmx-tmn) %>% 
-  dplyr::select(aet:tdiff)
+  dplyr::select(aet:tdiff) %>% 
+  dplyr::select(!c(cwd, pet))
 
 testBack <- read_csv(here('data/swd/backExtract_2000_2022.csv')) %>% 
   dplyr::select(aet:tmx) %>% 
   mutate(tmean = (tmx+tmn)/2,
-         tdiff = tmx-tmn)
+         tdiff = tmx-tmn) %>% 
+  
+  dplyr::select(!c(cwd, pet))
 
 O = cor(testOcc, method = "pearson", use = "complete.obs")
 B = cor(testBack, method = "pearson", use = "complete.obs")
@@ -135,13 +138,13 @@ swdOcc <- read_csv(here('data/swd/occExtract_2000_2022.csv')) %>%
          tdiff = round(tmx-tmn, 2),
          presence = 1) %>% 
   ## remove select variables
-  dplyr::select(!c(gbifid, tmx, tmn)) %>%  
+  dplyr::select(!c(gbifid, tmx, tmn, pet, cwd)) %>%  
   ## rename lon/lat cols
   rename(x = decimallongitude,
          y = decimallatitude)
 
 ## rearrange x and y to match background df
-swdOcc <- swdOcc[, c(2, 1, 3:8)]
+swdOcc <- swdOcc[, c(2, 1, 3:9)]
 
 
 ## Background Data ----------------------------------------------------------
@@ -149,7 +152,7 @@ swdBack <- read_csv(here('data/swd/backExtract_2000_2022.csv')) %>%
   mutate(tmean = round((tmx+tmn)/2, 2),
          tdiff = round(tmx-tmn, 2),
          presence = 0) %>% 
-  dplyr::select(!c(tmx, tmn))
+  dplyr::select(!c(tmx, tmn, pet, cwd))
 
 
 ## Bind into one df and
@@ -167,7 +170,7 @@ swd <- read_csv(here('data/swd/swd_2000_2022.csv'))
 
 ## Select env predictors for model (presence + background)
 x <- swd %>% 
-  dplyr::select(aet, tmean, tdiff)
+  dplyr::select(aet:tdiff)
 
 ## Specify occurrence data
 p <- swd %>% 
@@ -200,7 +203,7 @@ swd <- read_csv(here('data/swd/swd_2000_2022.csv'))
 
 ## Select env predictors for model (presence + background)
 x <- swd %>% 
-  dplyr::select(aet, tmean, tdiff)
+  dplyr::select(aet:tdiff)
 
 ## Specify occurrence data
 p <- swd %>% 
@@ -242,7 +245,7 @@ First we need to create rasters representing the monthly average for each predic
 source(here('R/env_avg.R'))
 
 ## Run fxn (shows progress bar)
-env_avg(var_names = c('aet','tmn','tmx'),
+env_avg(var_names = c('ppt'),
         pathIn = here('data/bcmv8/2000_2022//'),
         pathOut = here('data/bcmv8/monthly_avgs//'))
 ```
