@@ -15,8 +15,9 @@
 pred_month <- function(model, pathIn, pathOut) {
   
   ## Create df for variables to avg  -----------------------------------------
-  months <- data.frame(month = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
-                                 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'))
+  names_df <- data.frame(vars = rep(variables, each = 12),
+                         month = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                                   'jul', 'aug', 'sep', 'oct', 'nov', 'dec'))
   
   
   ## Monthly pred fxn --------------------------------------------------------
@@ -26,6 +27,12 @@ pred_month <- function(model, pathIn, pathOut) {
                             pattern = paste0("aet", ".+", months),
                             full = TRUE)
       aet <- terra::rast((aetFile))
+      
+      pptFile <- list.files(path = pathIn,
+                            patter = paste0("ppt",".+", months),
+                            full = TRUE)
+      ppt <- terra::rast(pptFile)  %>% 
+        terra::mask(., aet)
       
       tmnFile <- list.files(path = pathIn,
                             patter = paste0("tmn",".+", months),
