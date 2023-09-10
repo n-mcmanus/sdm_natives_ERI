@@ -12,7 +12,8 @@
 #' @author Nick McManus
 #' @param startYear first water year in dataset
 #' @param endYear last water year in dataset
-#' @param filepath path to directory with env data rasters
+#' @param pathMonth path to directory with monthly rasters
+#' @param pathQuarter path to directory with quarterly data
 #' @param sppOcc data frame with species occurrences (or background points) for extraction
 #' @param lon column name for longitude values in sppOcc dataframe (as character; default = "decimallongitude")
 #' @param lat column name for the latitude values in sppOcc dataframe (as character; default = "decimallatitude")
@@ -20,7 +21,7 @@
 #' @return data frame with environmental values at point of species observation
 
 
-env_extract <- function(startYear, endYear, filepath, sppOcc,
+env_extract <- function(startYear, endYear, pathMonth, pathQuarter, sppOcc,
                        lon = "decimallongitude", lat = "decimallatitude", crs = "WGS84") {
   
   ## Create df for range of dates -----------------------------------------
@@ -36,13 +37,15 @@ env_extract <- function(startYear, endYear, filepath, sppOcc,
   dates_df[1:3, 1] = (dates_df[4,1] - 1)
   
   
-  ## empty df to store loop results -------------------------------------------
-  extract_df <- data.frame()
+  ## empty dfs to store loop results -------------------------------------------
+  extractMonth_df <- data.frame()
+  extractWinter_df <- data.frame()
+  extractSummer_df <- data.frame()
   
-  ## Extract loop -------------------------------------------------------------
+  ## Monthly extract loop -----------------------------------------------------
   for (i in 1:nrow(dates_df)) {
     ## Read in list of raster files w/in directory
-    files <- list.files(path = filepath, 
+    files <- list.files(path = pathMonth, 
                         ## only list those with matching yr/mo in name
                         pattern= paste0(dates_df[i, 1], dates_df[i, 2]), 
                         full=TRUE)
@@ -72,14 +75,76 @@ env_extract <- function(startYear, endYear, filepath, sppOcc,
           dplyr::select(-ID)
         
         ## append results to df
-        extract_df <- rbind(extract_df, sppExtract)
+        extractMonth_df <- rbind(extractMonth_df, sppExtract)
       
     } else {
       ## If no obs for a yr/mo, skip
       next
     } ### end if/else statement
     
-  } ### end for loop
+  } ### end monthly for-loop
+  
+  
+  ## Quarterly extract loop ----------------------------------------------------
+  
+  ### Winter ppt -------------------------------
+  winter_df <- dates_df %>% 
+    filter(mon %in% c('dec', 'jan', 'feb')) %>% 
+    mutate(group = rep(1:(nrow(.)/3), each = 3))
+  
+  #### for-loop 1
+  for (i in 1:length(unique(winter_df$group))) {
+    quarter_df <- winter_df %>% 
+      filter(group == i)
+    
+    ## Read in raster
+    winter_rast <- terra::rast(paste0(pathQuarter, 
+                                      "ppt", 
+                                      quarter_df$year[2],
+                                      "winter.tif"))
+    names(winter_rast) <- "ppt_winter"
+    
+    #### for-loop 2
+    for (j in 1:nrow(quarter_df)) {
+      ## Filter obs to yr/mo
+      sppOcc_winter <- sppOcc %>% 
+        filter(year == quarter_df[j,1],
+               month == quarter_df[j,3])
+      
+      
+      ## If filtered df has obs, then vectorize and extract
+      if(nrow(sppOcc_winter) > 0) {
+        ## vectorize and reproj to env data crs
+        sppOcc_winter_vect <- sppOcc_winter %>%
+          terra::vect(geom = c(lon, lat), crs = crs) %>%
+          terra::project(y = crs(winter_rast))
+        
+        ## extract and tidy df
+        sppExtract_winter <- extract(winter_rast, 
+                                     sppOcc_winter_vect, 
+                                     method = "simple") %>%
+          ## only keep first 3 chars of each column name
+          ## (e.g. "cwd2021jan" becomes "cwd")
+          # rename_with(~substr(., 1, 3)) %>%
+          ## merge occ data w/extract data
+          cbind(sppOcc_winter, .) %>%
+          dplyr::select(-ID)
+        
+        ## append results to df
+        extractWinter_df <- rbind(extractWinter_df, sppExtract_winter)
+        
+      } else {
+        ## If no obs for a yr/mo, skip
+        next
+      } ### END if/else statement
+    }### END for-loop 2
+    
+  }### END for-loop 1
+  
+  
+  ## Join quarter and monthly
+  extract_df <- left_join(x=extractMonth_df, y=extractWinter_df)
+  
 
   return(extract_df)
   
