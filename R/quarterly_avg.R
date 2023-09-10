@@ -75,7 +75,7 @@ quarter_avg <- function(var_name, quarter, startYear, endYear, pathIn, pathOut) 
     stack_avg <- terra::app(stack, fun = 'mean')
     
     writeRaster(stack_avg,
-                paste0(pathOut, var_name, "_", quarter, "_", quarter_wy$year[3], ".tif"),
+                paste0(pathOut, var_name, quarter_wy$year[3], quarter, ".tif"),
                 overwrite = TRUE)
   }## End for-loop
   
