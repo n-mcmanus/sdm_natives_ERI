@@ -24,6 +24,12 @@
 env_extract <- function(startYear, endYear, pathMonth, pathQuarter, sppOcc,
                        lon = "decimallongitude", lat = "decimallatitude", crs = "WGS84") {
   
+  ## Warnings
+  if (startYear < 2000)
+    warning("This function was built with a dataset starting in water year 2000. \nEnsure your start year matches with available data.")
+  if (endYear >2022)
+    warning("This function was built with a dataset ending at water year 2022.\nEnsure your end year matches with available data.")
+  
   ## Create df for range of dates -----------------------------------------
   dates_df <- data.frame(year = rep(startYear:endYear, each = 12), 
                          ### Repeat each yr 12 times to create a row 
@@ -87,7 +93,7 @@ env_extract <- function(startYear, endYear, pathMonth, pathQuarter, sppOcc,
   
   ## Quarterly extract loop ----------------------------------------------------
   
-  ### Winter ppt -------------------------------
+  ### Winter ppt ------------------------------------------
   winter_df <- dates_df %>% 
     filter(mon %in% c('dec', 'jan', 'feb')) %>% 
     mutate(group = rep(1:(nrow(.)/3), each = 3))
@@ -102,6 +108,7 @@ env_extract <- function(startYear, endYear, pathMonth, pathQuarter, sppOcc,
                                       "ppt", 
                                       quarter_df$year[2],
                                       "winter.tif"))
+    ## Rename rast (will become var name in extract df)
     names(winter_rast) <- "ppt_winter"
     
     #### for-loop 2
@@ -123,9 +130,6 @@ env_extract <- function(startYear, endYear, pathMonth, pathQuarter, sppOcc,
         sppExtract_winter <- extract(winter_rast, 
                                      sppOcc_winter_vect, 
                                      method = "simple") %>%
-          ## only keep first 3 chars of each column name
-          ## (e.g. "cwd2021jan" becomes "cwd")
-          # rename_with(~substr(., 1, 3)) %>%
           ## merge occ data w/extract data
           cbind(sppOcc_winter, .) %>%
           dplyr::select(-ID)
@@ -142,10 +146,68 @@ env_extract <- function(startYear, endYear, pathMonth, pathQuarter, sppOcc,
   }### END for-loop 1
   
   
-  ## Join quarter and monthly
+  ## Join winter and monthly
   extract_df <- left_join(x=extractMonth_df, y=extractWinter_df)
   
 
-  return(extract_df)
+  ### Summer tmax ------------------------------------------------
+  summer_df <- dates_df %>% 
+    filter(mon %in% c('jun', 'jul', 'aug')) %>% 
+    mutate(group = rep(1:(nrow(.)/3), each = 3))
+  
+  #### for-loop 1
+  for (i in 1:length(unique(summer_df$group))) {
+    quarter_df <- summer_df %>% 
+      filter(group == i)
+    
+    ## Read in raster
+    summer_rast <- terra::rast(paste0(pathQuarter, 
+                                      "tmx", 
+                                      quarter_df$year[2],
+                                      "summer.tif"))
+    names(summer_rast) <- "tmx_summer"
+    
+    #### for-loop 2
+    for (j in 1:nrow(quarter_df)) {
+      ## Filter obs to yr/mo
+      sppOcc_summer <- sppOcc %>% 
+        filter(year == quarter_df[j,1],
+               month == quarter_df[j,3])
+      
+      
+      ## If filtered df has obs, then vectorize and extract
+      if(nrow(sppOcc_summer) > 0) {
+        ## vectorize and reproj to env data crs
+        sppOcc_summer_vect <- sppOcc_summer %>%
+          terra::vect(geom = c(lon, lat), crs = crs) %>%
+          terra::project(y = crs(summer_rast))
+        
+        ## extract and tidy df
+        sppExtract_summer <- extract(summer_rast, 
+                                     sppOcc_summer_vect, 
+                                     method = "simple") %>%
+          ## merge occ data w/extract data
+          cbind(sppOcc_summer, .) %>%
+          dplyr::select(-ID)
+        
+        ## append results to df
+        extractSummer_df <- rbind(extractSummer_df, sppExtract_summer)
+        
+      } else {
+        ## If no obs for a yr/mo, skip
+        next
+      } ### END if/else statement
+    }### END for-loop 2
+    
+  }### END for-loop 1
+  
+  
+  ## Join summer and monthly
+  extractAll_df <- left_join(x=extract_df, y=extractSummer_df)
+  
+  
+  
+  
+  return(extractAll_df)
   
 } ### end fxn
