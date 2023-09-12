@@ -55,12 +55,16 @@ pathIn = here("data/bcmv8/2000_2022//")
 pathOut = here("data/bcmv8/quarterly_avgs//")
 
 ## Run for winter ppt
-quarter_avg("ppt", "winter",
+quarter_rast("ppt", "winter", method="mean",
+            startYear = 2000, endYear = 2022,
+            pathIn, pathOut)
+
+quarter_rast("ppt", "winter", method="sum",
             startYear = 2000, endYear = 2022,
             pathIn, pathOut)
 
 ## Run for summer tmx
-quarter_avg("tmx", "summer",
+quarter_rast("tmx", "summer", method = "mean",
             startYear = 2000, endYear = 2022,
             pathIn, pathOut)
 
