@@ -131,11 +131,26 @@ Assessing the correlation between environmental variables for SDM. Additional de
 testBack <- read_csv(here('data/swd/backExtract_2000_2022.csv')) %>% 
   dplyr::select(aet:tmx_summer) %>% 
   mutate(tmean = (tmx+tmn)/2,
-         tdiff = tmx-tmn)
-  # dplyr::select(!c(cwd, pet))
+         tdiff = tmx-tmn) %>%
+  dplyr::select(!c(cwd, pet, tmn, tmn))
 
-backCor = cor(testBack, method = "pearson", use = "everything")
-corrplot(backCor, method = 'number', type = 'upper')
+
+cor <- cor(testBack, method = "pearson", use = "everything")
+corrplot(cor, method = 'number', type = 'upper')
+
+# summer <- testBack %>% 
+#   dplyr::select(!ppt_winter) %>% 
+#   filter(!is.na(tmx_summer))
+# 
+# summerCor = cor(summer, method = "pearson", use = "everything")
+# corrplot(summerCor, method = 'number', type = 'upper')
+# 
+# winter <- testBack %>% 
+#   dplyr::select(!tmx_summer) %>% 
+#   filter(!is.na(ppt_winter))
+# 
+# winterCor = cor(winter, method = "pearson", use = "everything")
+# corrplot(winterCor, method = 'number', type = 'upper')
 ```
 
 
