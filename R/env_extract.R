@@ -10,14 +10,14 @@
 #' convention of BCMv8 data. 
 #' 
 #' @author Nick McManus
-#' @param startYear first water year in dataset
-#' @param endYear last water year in dataset
-#' @param pathMonth path to directory with monthly rasters
-#' @param pathQuarter path to directory with quarterly data
-#' @param sppOcc data frame with species occurrences (or background points) for extraction
-#' @param lon column name for longitude values in sppOcc dataframe (as character; default = "decimallongitude")
-#' @param lat column name for the latitude values in sppOcc dataframe (as character; default = "decimallatitude")
-#' @param crs The coordinate reference system of the spp occurrence data (as character; default = "WGS84")
+#' @param startYear character or numeric. The first water year in dataset.
+#' @param endYear character or numeric. The last water year in dataset.
+#' @param pathMonth character. File path to directory with monthly rasters.
+#' @param pathQuarter character. File path to directory with quarterly data (generated from `quarterly_rast()` function).
+#' @param sppOcc data frame. Contains species occurrence (or background points) data for extraction.
+#' @param lon character. Variable name for longitude values in sppOcc df (default = "decimallongitude")
+#' @param lat character. Variable name for the latitude values in sppOcc df (default = "decimallatitude")
+#' @param crs character. The coordinate reference system of the spp occurrence data (default = "WGS84")
 #' @return data frame with environmental values at point of species observation
 
 
@@ -54,26 +54,29 @@ env_extract <- function(startYear, endYear, pathMonth, pathQuarter, sppOcc,
                        char = "=")
 
   
-  ## Monthly extract loop --------------------------------------------------
-  
+  ## Extract loop --------------------------------------------------
   ## empty df to store loop results
   extract_df <- data.frame()
   
-  ## LOOP START
+  ## LOOP START 
   for (i in 1:nrow(dates_df)) {
     ## List of monthly raster files
-    files <- list.files(path = pathMonth, 
+    filesMonth <- list.files(path = pathMonth, 
                         ## only list those with matching yr/mo in name
                         pattern= paste0(dates_df$year[i], dates_df$mon[i]), 
-                        full=TRUE)
+                        full=F)
     
     ## List of quarterly raster files
     filesQuarter <- list.files(path = pathQuarter,
                                pattern = paste0(dates_df$wy[i]),
-                               full = TRUE)
+                               full = F)
     
     ## Stack all rasters
-    env_stack <- terra::rast(c(files, filesQuarter))
+    env_stack <- terra::rast(c(paste0(pathMonth,filesMonth), 
+                               paste0(pathQuarter,filesQuarter)))
+    
+    ## Rename to get unique layers for quarter rasts (doesn't read in _ correct)
+    names(env_stack) <- c((gsub(".tif", "", filesMonth)), (gsub(".tif", "", filesQuarter)))
     
     ## Filter obs to yr/mo
     sppOcc_filter <- sppOcc %>% 
@@ -93,11 +96,11 @@ env_extract <- function(startYear, endYear, pathMonth, pathQuarter, sppOcc,
           ## only keep first 3 chars of monthly columns
           ## (e.g. "cwd2021jan" becomes "cwd")
           rename_with(.fn= ~substr(., 1, 3), 
-                      .cols = 1:(nlyr(env_stack)-2)) %>% 
-          ## rename last two rows (quarterly avgs)
-          ## (e.g. "ppt2021winter" becomes "ppt_winter")
-          rename_with(.fn= ~paste0(substr(.,1,3), "_", substr(.,8,13)), 
-                      .cols = (ncol(.)-1):(ncol(.))) %>% 
+                      .cols = 1:(nlyr(env_stack)-3)) %>% 
+          ## rename last three rows (quarterly rasts)
+          ## (e.g. "ppt2021winter_mean" becomes "ppt_winter_mean")
+          rename_with(.fn= ~gsub(dates_df$wy[i], "_", x=.), 
+                      .cols = (ncol(.)-2):(ncol(.))) %>% 
           ## merge occ data w/extract data
           cbind(sppOcc_filter, .)
         
