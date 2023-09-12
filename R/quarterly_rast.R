@@ -52,19 +52,11 @@ quarter_rast <- function(var, quarter, method, startYear, endYear, pathIn, pathO
       mutate(file = paste0(variable, year, month, ".tif"))
   } 
   
-  ## Progress bar ------------------------------------------------------------
-  runLength <- length(startYear:endYear)
-  pb <- txtProgressBar(min = 0,
-                       max = runLength,
-                       style = 3,
-                       width = runLength,
-                       char = "=")
-  
   ## Generate rasters -------------------------------------------------------
   for (i in startYear:endYear) {
     ## filter data by water year
     quarter_wy <- dates_filtered %>% 
-      filter(group == i)
+      filter(wy == i)
     
     ## stack rasters for the quarter
     stack <- terra::rast(c(paste0(pathIn, quarter_wy$file[1]),
@@ -78,11 +70,8 @@ quarter_rast <- function(var, quarter, method, startYear, endYear, pathIn, pathO
     
     ## export raster
     writeRaster(quarterRast,
-                paste0(pathOut, var, quarter_wy$year[3], quarter, ".tif"),
+                paste0(pathOut, var, quarter_wy$wy[1], quarter,"_", method, ".tif"),
                 overwrite = TRUE)
-    
-    ## update progress bar
-    setTxtProgressBar(pb, i)
   }## END for-loop
   
   
