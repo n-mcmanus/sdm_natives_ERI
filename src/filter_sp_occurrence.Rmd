@@ -24,16 +24,16 @@ library(dismo)
 This data was directly downloaded from the website as separate CSVs for each species. We'll read them all in as one dataframe to more easily filter the data. 
 *NOTE:* Creating a "low" and "high" filtered version of the data to see how much of a difference strictness over data sources plays. 
 ```{r}
-calflora <- list.files(path = here("data/occ/calflora/"),
+files_cf <- list.files(path = here("data/occ/calflora/"),
                        full.names = TRUE)
 
-calfOcc <- data.frame()
+cfOcc <- data.frame()
 
 ## combine all spp into one df
-for (i in 1:length(calflora)){
-  df <- read_csv(calflora[i])
+for (i in 1:length(files_cf)){
+  df <- read_csv(files_cf[i])
   
-  calfOcc <- rbind(calfOcc, df)
+  cfOcc <- rbind(cfOcc, df)
 }
 
 ## List of accepted sources
@@ -49,7 +49,7 @@ sources <- paste(c("BLM",
                    "Hrusa"), collapse = "|")
 
 ## Low filter
-calfOcc_low <- calfOcc %>% 
+calfOcc_low <- cfOcc %>% 
   ## GPS accuracy greater than raster cell size
   filter(`Location Quality` %in% c("high", "medium"),
          `Accuracy: Square Meters` <= 270)
@@ -64,12 +64,12 @@ write_csv(calfOcc_high, here("data/occ/calflora/combined_highfilter.csv"))
 ```
 
 
+### GBIF
 
 This script uses the `rgbif` package to directly download species occurence data from GBIF. To use the `occ_download()` function, this requires setting your GBIF login details. Details on how to set this can be found at: https://docs.ropensci.org/rgbif/articles/gbif_credentials.html
-
 ```{r}
-### Create list of species names
-name_list <- c(
+## Pull taxon keys from list of spp
+taxon_keys <- name_backbone_checklist(c(
   ## shrubs
   "Atriplex polycarpa",
   "Peritoma arborea",
@@ -80,14 +80,69 @@ name_list <- c(
   ## spp that naturally colonized
   "Amsinckia menziesii (Lehm.) A.Nelson & J.F.Macbr.",
   "Caulanthus lasiophyllus (Hook. & Arn.) Payson"
+)) %>% 
+  pull(usageKey)
+
+## var names
+names <- c(
+  "a_polycarpa",
+  "p_arborea",
+  "c_pungens",
+  "l_pentachaeta",
+  "p_ciliata",
+  "a_menziesii",
+  "c_lasiophyllus"
 )
 
-### Check if they worked
-# name_backbone_checklist(name_list)
 
-### Pull taxon keys from list
-taxon_keys <- name_backbone_checklist(name_list) %>% 
-  pull(usageKey)
+## Loop through spp list and save each
+for (i in 1:length(taxon_keys)) {
+  ### download filtered data for A. polycarpa
+gbif_download <- occ_download(pred_in("taxonKey", taxon_keys[i]),
+                       ## remove geospatial issues
+                       pred("hasGeospatialIssue", FALSE),
+                       ## ensure coords
+                       pred("hasCoordinate", TRUE),
+                       ## remove "absent" occurences
+                       pred("occurrenceStatus", "PRESENT"),
+                       ## within US
+                       pred("country", "US"),
+                       ## within CA
+                       pred("stateProvince", "California"),
+                       ## uncertainty less than 5000m
+                       #pred_lt("coordinateUncertaintyInMeters",5000),
+                       ## output as CSV
+                       format = "SIMPLE_CSV")
+
+### check on download status
+occ_download_wait(gbif_download)
+
+### import GBIF data into env and filter using CoordinateCleaner pkg
+ species <- occ_download_get(gbif_download, 
+                             path = here("data/occ/gbif/zips/"),
+                             overwrite = TRUE) %>%
+   occ_download_import() %>% 
+   ## set lowercase column names to work with CC
+   setNames(tolower(names(.))) %>% 
+   ## filter out duplicate points
+   distinct(decimallongitude, decimallatitude, 
+            specieskey, datasetkey, .keep_all = TRUE) %>% 
+   ## filter known uncertainty below 270 and keep NAs
+   filter(coordinateuncertaintyinmeters < 270 | is.na(coordinateuncertaintyinmeters)) %>% 
+   ## known inaccurate default values
+   filter(!coordinateuncertaintyinmeters %in% c(301,3036,999,9999)) %>% 
+   ## remove herbaria/zoo locations
+   cc_inst(lon = "decimallongitude", lat = "decimallatitude",
+           buffer = 270, value = "clean", verbose = TRUE) %>% 
+   ## remove ocean values
+   cc_sea(lon = "decimallongitude", lat = "decimallatitude")
+ 
+ ## export file
+ write_csv(species, paste0(here("data/occ/gbif//"),names[i],"_gbif.csv"))
+ 
+ ## Rename as local variable
+ assign(names[i], species)
+}
 ```
 
 Start with A. polycarpa
@@ -113,12 +168,23 @@ gbif_download <- occ_download(pred_in("taxonKey", taxon_keys[2]),
 occ_download_wait(gbif_download)
 
 ### import GBIF data into env and filter using CoordinateCleaner pkg
-p_arborea <- occ_download_get(gbif_download) %>%
+p_arborea2 <- occ_download_get(gbif_download, 
+                              path = here("data/occ/gbif/zips/"),
+                              overwrite = TRUE) %>%
   occ_download_import() %>% 
   ## set lowercase column names to work with CC
   setNames(tolower(names(.))) %>% 
   ## filter out duplicate points
-  distinct(decimallongitude, decimallatitude, specieskey, datasetkey, .keep_all = TRUE)
+  distinct(decimallongitude, decimallatitude, specieskey, datasetkey, .keep_all = TRUE) %>% 
+  ## filter known uncertainty below 270 and keep NAs
+  filter(coordinateuncertaintyinmeters < 270 | is.na(coordinateuncertaintyinmeters)) %>% 
+  ## known inaccurate default values
+  filter(!coordinateuncertaintyinmeters %in% c(301,3036,999,9999)) %>% 
+  ## remove herbaria/zoo locations
+  cc_inst(lon = "decimallongitude", lat = "decimallatitude",
+          buffer = 270, value = "clean", verbose = TRUE) 
+  ## remove accidental ocean values
+  cc_sea(lon = "decimallongitude", lat = "decimallatitude")
 ```
 
 Pull in CalFlora data for A. polycarpa, merge with GBIF data, and determine how many duplicates there are
