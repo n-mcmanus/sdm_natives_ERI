@@ -134,7 +134,7 @@ testBack <- read_csv(here('data/swd/backExtract_2000_2022.csv')) %>%
          tdiff = tmx-tmn)
   # dplyr::select(!c(cwd, pet))
 
-backCor = cor(testBack, method = "pearson", use = "pairwise.complete.obs")
+backCor = cor(testBack, method = "pearson", use = "everything")
 corrplot(backCor, method = 'number', type = 'upper')
 ```
 
