@@ -129,6 +129,7 @@ taxon_keys <- name_backbone_checklist(c(
 )) %>% 
   pull(usageKey)
 
+
 ## var names
 names <- c(
   "a_polycarpa",
@@ -187,8 +188,79 @@ occ_download_wait(gbif_download)
  write_csv(species, paste0(here("data/occ/gbif//"),names[i],"_gbif.csv"))
  
  ## Rename as local variable
+ assign(names[i], species)
+}
+```
+
+
+## Loop through spp list and save each
+for (i in 1:length(taxon_keys)) {
+  ### download filtered data for A. polycarpa
+gbif_download <- occ_download(pred_in("taxonKey", taxon_keys[i]),
+                       ## remove geospatial issues
+                       pred("hasGeospatialIssue", FALSE),
+                       ## ensure coords
+                       pred("hasCoordinate", TRUE),
+                       ## remove "absent" occurences
+                       pred("occurrenceStatus", "PRESENT"),
+                       ## within US
+                       pred("country", "US"),
+                       ## within CA
+                       pred("stateProvince", "California"),
+                       ## uncertainty less than 5000m
+                       #pred_lt("coordinateUncertaintyInMeters",5000),
+                       ## output as CSV
+                       format = "SIMPLE_CSV")
+
+### check on download status
+occ_download_wait(gbif_download)
+
+### import GBIF data into env and filter using CoordinateCleaner pkg
+<<<<<<< HEAD
+ species <- occ_download_get(gbif_download, 
+                             path = here("data/occ/gbif/zips/"),
+                             overwrite = TRUE) %>%
+   occ_download_import() %>% 
+   ## set lowercase column names to work with CC
+   setNames(tolower(names(.))) %>% 
+   ## filter out duplicate points
+   distinct(decimallongitude, decimallatitude, 
+            specieskey, datasetkey, .keep_all = TRUE) %>% 
+   ## filter known uncertainty below 270 and keep NAs
+   filter(coordinateuncertaintyinmeters < 270 | is.na(coordinateuncertaintyinmeters)) %>% 
+   ## known inaccurate default values
+   filter(!coordinateuncertaintyinmeters %in% c(301,3036,999,9999)) %>% 
+   ## remove herbaria/zoo locations
+   cc_inst(lon = "decimallongitude", lat = "decimallatitude",
+           buffer = 270, value = "clean", verbose = TRUE) %>% 
+   ## remove ocean values
+   cc_sea(lon = "decimallongitude", lat = "decimallatitude")
+ 
+ ## export file
+ write_csv(species, paste0(here("data/occ/gbif//"),names[i],"_gbif.csv"))
+ 
+ ## Rename as local variable
  assign(paste0(names[i], "_gbif"), species)
 }
+=======
+p_arborea2 <- occ_download_get(gbif_download, 
+                              path = here("data/occ/gbif/zips/"),
+                              overwrite = TRUE) %>%
+  occ_download_import() %>% 
+  ## set lowercase column names to work with CC
+  setNames(tolower(names(.))) %>% 
+  ## filter out duplicate points
+  distinct(decimallongitude, decimallatitude, specieskey, datasetkey, .keep_all = TRUE) %>% 
+  ## filter known uncertainty below 270 and keep NAs
+  filter(coordinateuncertaintyinmeters < 270 | is.na(coordinateuncertaintyinmeters)) %>% 
+  ## known inaccurate default values
+  filter(!coordinateuncertaintyinmeters %in% c(301,3036,999,9999)) %>% 
+  ## remove herbaria/zoo locations
+  cc_inst(lon = "decimallongitude", lat = "decimallatitude",
+          buffer = 270, value = "clean", verbose = TRUE) 
+  ## remove accidental ocean values
+  cc_sea(lon = "decimallongitude", lat = "decimallatitude")
+>>>>>>> b70970b9f8773e7f294a1131df0314f0c6a4adc0
 ```
 
 
