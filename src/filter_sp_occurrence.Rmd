@@ -1,12 +1,12 @@
 ---
-title: "Filter species occurrence data"
+title: "Species occurrence data and background points"
 author: "Nick McManus"
 date: "2023-07-07"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, include=FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 library(tidyverse)            ## always
 library(here)                 ## reading/writing data
 library(rgbif)                ## download GBIF data
@@ -16,6 +16,7 @@ library(raster)               ## rast format that plays w/dismo
 library(enmSdmX)              ## spatially thinning data
 library(dismo)                ## generating background points
 ```
+
 
 # Download/import Occurrence Data
 
@@ -210,115 +211,6 @@ for (i in 1:length(taxon_keys)) {
 ```
 
 
-**OLD TEST CODE:**
-Pull in CalFlora data for A. polycarpa, merge with GBIF data, and determine how many duplicates there are
-```{r}
-# apoly_calf <- read_csv("data/a_polycarpa_calflora.csv") %>% 
-#   janitor::clean_names()
-# 
-# ## subset of calflora data
-# apoly_calf_sub <- apoly_calf %>% 
-#   dplyr::select(c(latitude, longitude, date)) %>% 
-#   #mutate(source = "calflora") %>% 
-#   mutate(latitude = round(latitude, 4))
-# 
-# ## subset of gbif data
-# apoly_gbif_sub <- a_poly %>% 
-#   dplyr::select(c(decimallatitude, decimallongitude, eventdate)) %>% 
-#   rename(latitude = decimallatitude, 
-#          longitude = decimallongitude,  
-#          date = eventdate) %>% 
-#   #mutate(source = "gbif") %>% 
-#   mutate(latitude = round(latitude, 4))
-# 
-# apoly_gbif_sub$id <- as.character(apoly_gbif_sub$id)
-# apoly_gbif_sub$date <- as.Date(apoly_gbif_sub$date)
-# 
-# 
-# test <- inner_join(apoly_calf_sub, apoly_gbif_sub)
-# 
-# ## When rounded to 4 (10m), only two points match. These are both iNaturalist entiries
-# ## that came in both databases
-# 
-# apoly_gbif2 <- apoly_gbif_sub %>% 
-#   mutate(latitude = round(latitude, 2),
-#          longitude = round(longitude, 2))
-# 
-# apoly_calf2 <- apoly_calf_sub %>% 
-#   mutate(latitude = round(latitude, 2),
-#          longitude = round(longitude, 2))
-# 
-# test2 <- inner_join(apoly_gbif2, apoly_calf2)
-# 
-# ## only 5 matching
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# ## merge
-# apoly_merge <- rbind(apoly_calf_sub, apoly_gbif_sub)
-# 
-# ## round lat
-# apoly_merge_sub <- apoly_merge %>% 
-#   mutate(latitude = round(latitude, 4)) %>% 
-#   group_by(date)
-# 
-# 
-# ```
-# 
-# ```{r}
-# parb_calf <- read_csv(here("data/p_arborea_calflora.csv")) %>% 
-#   janitor::clean_names()
-# 
-# ## subset of calflora data
-# parb_calf_sub <- parb_calf %>% 
-#   dplyr::select(c(latitude, longitude, date)) %>% 
-#   #mutate(source = "calflora") %>% 
-#   mutate(latitude = round(latitude, 4))
-# 
-# ## subset of gbif data
-# parb_gbif_sub <- p_arborea %>% 
-#   dplyr::select(c(decimallatitude, decimallongitude, eventdate)) %>% 
-#   rename(latitude = decimallatitude, 
-#          longitude = decimallongitude,  
-#          date = eventdate) %>% 
-#   #mutate(source = "gbif") %>% 
-#   mutate(latitude = round(latitude, 4))
-# 
-# parb_gbif_sub$id <- as.character(apoly_gbif_sub$id)
-# parb_gbif_sub$date <- as.Date(parb_gbif_sub$date)
-# 
-# 
-# test <- inner_join(parb_calf_sub, parb_gbif_sub)
-# 
-# ## When rounded to 4 (10m), only two points match. These are both iNaturalist entiries
-# ## that came in both databases
-# 
-# parb_gbif2 <- parb_gbif_sub %>% 
-#   mutate(latitude = round(latitude, 2),
-#          longitude = round(longitude, 2))
-# 
-# parb_calf2 <- parb_calf_sub %>% 
-#   mutate(latitude = round(latitude, 2),
-#          longitude = round(longitude, 2))
-# 
-# test2 <- inner_join(parb_gbif2, parb_calf2)
-# 
-# ## only 5 matching
-```
-
-
-
 
 
 # Merge and Spatially Thin
@@ -413,74 +305,26 @@ for (i in 1:length(names)) {
 
 
 
-```{r}
-
-## Testing spThin -----------------------------------------
-# thinTest <- thin(
-#   loc.data = sppOcc,
-#   lat.col = "decimallatitude",
-#   long.col = "decimallongitude",
-#   spec.col = "species",
-#   thin.par = 0.27,
-#   reps = 1,
-#   locs.thinned.list.return = T,
-#   write.files = F
-#   # out.dir = here('data/species_occurrence_GBIF/')
-# 
-# )
-# thinned <- as.data.frame(thinTest)
-# #
-# diff <- setdiff(sppThin, thinned)
-# diff_vect <- diff %>%
-#   vect(geom = c("Longitude", "Latitude"), crs = "WGS84")
-# writeVector(diff_vect, here('data/diff'))
-# #
-# #
-# enmTest_vect <- sppThin %>%
-#   vect(geom = c("decimallongitude", "decimallatitude"), crs = "WGS84")
-# 
-# thinTest_vect <- thinned %>%
-#   vect(geom = c("Longitude", "Latitude"), crs = "WGS84")
-
-
-# writeVector(enmTest_vect, here('data/enmTest'))
-# writeVector(thinTest_vect, here('data/thinTest'))
-
-```
-
-
-
 # Generate background points
 
-The sample with enmSdmX is faster and compatible with terra, but the dismo one has the option of inputting occurrence data and NOT sampling those points... which may be a useful feature. For now using the Dismo fxn. 
-**NOTE:** updated from 40pts per mo/yr to 150 (41400 total). 
-```{r}
-### Set up data inputs ----------------------------------------------
-## Commented out code for presence data...
-# pres <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa_thinned.csv')) %>% 
-#   dplyr::select(decimallatitude, decimallongitude) %>% 
-#   rename(x = decimallongitude,
-#          y = decimallatitude)
-# ## Getting weird error in dismo::randomPoints
-# ## Have to explicitly extablish values as dbl in a df
-# pres$y = as.numeric(pres$y)
-# pres$x = as.numeric(pres$x)
-# pres <- as.data.frame(pres)
+Finally, random background occurrence points will be generated across all of California using the `dismo` package and exported as a CSV file. 
 
-## Read in reference raster and make RasterLayer obj
+**NOTE:** Updated from 40 to 150 pts per mo/yr (11,040 to 41,400 total). Rather than use points from all of CA to create SDM model, we'll only be using points within a buffered distance from occurrence points for a species. The total number was increased to ensure that there are enough within the sample of background points taken to train the model. This methodoly may change later.
+```{r}
+## Reference raster; make RasterLayer obj
 rast <- rast(here('data/bcmv8/2000_2022/aet2020dec.tif')) %>% 
   project(y = "WGS84")
 r <- raster(rast)
 
-### Create random background points
+## Create random background points
 ## Random samples w/o replacement
 backOcc <- randomPoints(mask = r, 
                         n = 41400,  
                         prob = FALSE)
 backOcc <- as.data.frame(backOcc)
 
-### assign 150 pts to each mo/yr
-### first create df of mo/yr in wy format
+## Assign 150 pts to each mo/yr
+## First create df of mo/yr in wy format, then bind to pts df
 dates <- data.frame(month = rep(1:12, each = 150),
                     year = rep(2000:2022, each = 1800))
 dates <- rbind(tail(dates, 450), head(dates, -450))
@@ -488,11 +332,8 @@ dates[1:450, 2] = (dates[451,2] - 1)
 
 backSamp <- cbind(backOcc, dates)
 
-### export as csv
+### export
 write_csv(backSamp, here('data/occ/background_points.csv'))
 ```
-
-
-
 
 
