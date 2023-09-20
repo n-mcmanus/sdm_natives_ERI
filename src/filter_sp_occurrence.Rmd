@@ -11,63 +11,24 @@ library(tidyverse)            ## always
 library(here)                 ## reading/writing data
 library(rgbif)                ## download GBIF data
 library(CoordinateCleaner)    ## filter/clean GBIF data
-library(terra)
-library(raster)
-library(enmSdmX)
-library(spThin)
-library(dismo)
+library(terra)                ## rast pkg for quicker reprojecting
+library(raster)               ## rast format that plays w/dismo
+library(enmSdmX)              ## spatially thinning data
+library(dismo)                ## generating background points
 ```
 
 # Download/import Occurrence Data
 
-### VegBank
-
-This data was downloaded directly from the VegBank website. Data for all plots of one spp were downloaded and zipped as a "batch". Information about the plots, contributors, and all the spp and % cover are written as different CSV files. 
-Spatial information on the plots is limited; only one coordinate (assuming the center) is given for each plot. Sometimes the size of the plot is provided in m^2, sometimes it's reported qualitatively (e.g. "small" or "large"), and sometimes there is no information. Because presence data will be thinned in the next step, we'll assign one observation point for a plot under 270m^2 in size, regardless of %coverage. For plots where area is not reported, we'l err on the side of caution and only include one point as well. For plots over 270m^2..... idk. The observaiton coordinate assigned will be the one reported for the plot in the VegBank database.
-*NOTE:* we'll decide if this methodology should be changed later. 
-```{r}
-path = here("data/occ/vegbank//")
-
-names <- c(
-  "a_polycarpa",
-  "p_arborea",
-  "c_pungens",
-  "l_pentachaeta",
-  "p_ciliata",
-  "a_menziesii"
-  ## Not in vegbank
-  # "c_lasiophyllus"
-)
-
-
-for (i in 1:length(names)) {
-  
-  ## Read in data
-  plotData <- read_csv(paste0(path, names[i], "_noFilter/plot_env.csv"))
-  
-  ## filter and keep coords
-  plotData_obs <- plotData %>% 
-    mutate(date = lubridate::ymd(obsstartdate_vb)) %>% 
-    filter(date >= "1999-10-01") %>% 
-    ## Filter for under 270. Won't do for now
-    # filter(area <= 270 | area == "null") %>% 
-    dplyr::select(observation_id, authorplotcode_vb, 
-                  project_id_name, date, latitude, longitude) %>% 
-    mutate(spp = names[i])
-  
-  ## export
-  write_csv(plotData_obs, paste0(path, names[i], "_vegbank.csv"))
-  
-  ## keep in env for later??
-  assign(paste0(names[i], "_vegbank"), plotData_obs)
-}
-
-
-```
+This first section will read in, filter, and export species occurrence data from three different sources: GBIF, VegBank, and CalFlora. Both VegBank and CalFlora data are downloaded directly from their websites. GBIF data is imported and filtered using the `rgbif` and `CoordinateCleaner` packages, respectively. 
 
 
 ### CalFlora
-This data was directly downloaded from the website as separate CSVs for each species. We'll read them all in as one dataframe to more easily filter the data. 
+
+This data was directly downloaded from the CalFlora website, found here:
+https://www.calflora.org/entry/observ.html
+
+A single CSV was downloaded for each species. We'll read them all in as one dataframe to more easily filter the data. 
+
 *NOTE:* Creating a "low" and "high" filtered version of the data to see how much of a difference strictness over data sources plays. 
 ```{r}
 path = here("data/occ/calflora//")
@@ -94,9 +55,8 @@ sources <- paste(c("BLM",
                    "Taylor",
                    "Hrusa"), collapse = "|")
 
-
+## Loop through each spp to read in, filter, and export
 for (i in 1:length(names)) {
-  
   ## Read in data
   df <- read_csv(paste0(path, "download/", names[i], "_calflora.csv"))
   
@@ -113,14 +73,63 @@ for (i in 1:length(names)) {
   write_csv(df_filter, paste0(path, names[i], "_calflora_lowFilter.csv"))
 }
 
-  
 ```
+
+
+
+### VegBank
+
+This data was downloaded directly from the VegBank website, found here: http://vegbank.org/vegbank/forms/plot-query.jsp. 
+
+Data for all plots of one spp were downloaded and zipped as a "batch". Information about the plots, contributors, and all the spp and % cover are written as different CSV files. 
+Spatial information on the plots is limited; only one coordinate (assuming the center) is given for each plot. Sometimes the size of the plot is provided in m^2, sometimes it's reported qualitatively (e.g. "small" or "large"), and sometimes there is no information. Because presence data will be thinned in the next step, we'll assign one observation point for a plot under 270m^2 in size, regardless of % coverage. For plots where area is not reported, we'll err on the side of caution and only include one point as well. For plots over 270m^2..... TBD. The observation coordinate assigned will be the one reported for the plot in the VegBank database.
+
+*NOTE:* we'll decide if this methodology should be changed later. 
+```{r}
+path = here("data/occ/vegbank//")
+
+names <- c(
+  "a_polycarpa",
+  "p_arborea",
+  "c_pungens",
+  "l_pentachaeta",
+  "p_ciliata",
+  "a_menziesii"
+  ## Not in vegbank
+  # "c_lasiophyllus"
+)
+
+## Loop to read in, filter, and export for each spp
+for (i in 1:length(names)) {
+  
+  ## Read in data
+  plotData <- read_csv(paste0(path, names[i], "_noFilter/plot_env.csv"))
+  
+  ## filter and keep coords
+  plotData_obs <- plotData %>% 
+    mutate(date = lubridate::ymd(obsstartdate_vb)) %>% 
+    filter(date >= "1999-10-01") %>% 
+    ## Filter for under 270. Won't do for now
+    # filter(area <= 270 | area == "null") %>% 
+    dplyr::select(observation_id, authorplotcode_vb, 
+                  project_id_name, date, latitude, longitude) %>% 
+    mutate(spp = names[i])
+  
+  ## export
+  write_csv(plotData_obs, paste0(path, names[i], "_vegbank.csv"))
+}
+
+
+```
+
 
 
 
 ### GBIF
 
-This script uses the `rgbif` package to directly download species occurence data from GBIF. To use the `occ_download()` function, this requires setting your GBIF login details. Details on how to set this can be found at: https://docs.ropensci.org/rgbif/articles/gbif_credentials.html
+This script uses the `rgbif` package to directly download species occurence data from GBIF. To use the `occ_download()` function, this requires setting your GBIF login details. Details on how to set this can be found at: 
+https://docs.ropensci.org/rgbif/articles/gbif_credentials.html
+
 ```{r}
 ## Pull taxon keys from list of spp
 taxon_keys <- name_backbone_checklist(c(
@@ -138,7 +147,6 @@ taxon_keys <- name_backbone_checklist(c(
   pull(usageKey)
 
 
-## var names
 names <- c(
   "a_polycarpa",
   "p_arborea",
@@ -313,7 +321,7 @@ Pull in CalFlora data for A. polycarpa, merge with GBIF data, and determine how 
 
 
 
-# Spatial Thinning
+# Merge and Spatially Thin
 
 BCMv8 data are available at 270m resolution. To avoid biasing the model to oversampled regions, only one occurrence per 270m pixel will be used for extraction. We'll first combine occurrence data by species across all data sources, then thin and filter the data to be used in the SDM model. 
 ```{r}
@@ -324,6 +332,7 @@ path_vegbank <- here("data/occ/vegbank//")
 
 ## reference raster for thinning
 rast <- rast(here('data/bcmv8/2000_2022/aet2020dec.tif')) %>% 
+  ## match crs to spp occ data
   project(y = "WGS84")
 
 ## spp names
@@ -336,6 +345,7 @@ names <- c(
   "a_menziesii",
   "c_lasiophyllus"
 )
+
 
 ## Read in, merge, thin, and export for each spp on list
 for (i in 1:length(names)) {
@@ -389,7 +399,6 @@ for (i in 1:length(names)) {
 
   ## Merge and thin -----------
   combo <- rbind(gbif, calflora, vegbank)
-  
   comboThin <- elimCellDuplicates(combo, rast, longLat = c("lon", "lat"))
   
   ## Export
@@ -444,6 +453,7 @@ for (i in 1:length(names)) {
 # Generate background points
 
 The sample with enmSdmX is faster and compatible with terra, but the dismo one has the option of inputting occurrence data and NOT sampling those points... which may be a useful feature. For now using the Dismo fxn. 
+**NOTE:** updated from 40pts per mo/yr to 150 (41400 total). 
 ```{r}
 ### Set up data inputs ----------------------------------------------
 ## Commented out code for presence data...
@@ -458,32 +468,28 @@ The sample with enmSdmX is faster and compatible with terra, but the dismo one h
 # pres <- as.data.frame(pres)
 
 ## Read in reference raster and make RasterLayer obj
-aet2020 <- rast(here('data/bcmv8/2021_2022/aet2020dec.tif')) %>% 
+rast <- rast(here('data/bcmv8/2000_2022/aet2020dec.tif')) %>% 
   project(y = "WGS84")
-aet2020_r <- raster(aet2020)
+r <- raster(rast)
 
-### Create random background points --------------------------------------
+### Create random background points
 ## Random samples w/o replacement
-## ensure pts aren't in same cell as presence data 
-sampOcc <- randomPoints(mask = aet2020_r, 
-                        n = 11040,  
+backOcc <- randomPoints(mask = r, 
+                        n = 41400,  
                         prob = FALSE)
-sampOcc <- as.data.frame(sampOcc)
+backOcc <- as.data.frame(backOcc)
 
-### confirm no two points in same pixel
-# test <- elimCellDuplicates(sampOcc, aet2020, longLat = c("x", "y"))
-
-### assign 40 pts to each mo/yr
+### assign 150 pts to each mo/yr
 ### first create df of mo/yr in wy format
-dates <- data.frame(month = rep(1:12, each = 40),
-                    year = rep(2000:2022, each = 480))
-dates <- rbind(tail(dates, 120), head(dates, -120))
-dates[1:120, 2] = (dates[121,2] - 1)
+dates <- data.frame(month = rep(1:12, each = 150),
+                    year = rep(2000:2022, each = 1800))
+dates <- rbind(tail(dates, 450), head(dates, -450))
+dates[1:450, 2] = (dates[451,2] - 1)
 
-backSamp <- cbind(sampOcc, dates)
+backSamp <- cbind(backOcc, dates)
 
 ### export as csv
-write_csv(backSamp, here('data/species_occurrence_GBIF/background_points.csv'))
+write_csv(backSamp, here('data/occ/background_points.csv'))
 ```
 
 
