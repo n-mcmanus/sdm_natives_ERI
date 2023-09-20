@@ -18,7 +18,7 @@ library(spThin)
 library(dismo)
 ```
 
-## Download/import Occurrence Data
+# Download/import Occurrence Data
 
 ### VegBank
 
@@ -70,17 +70,17 @@ for (i in 1:length(names)) {
 This data was directly downloaded from the website as separate CSVs for each species. We'll read them all in as one dataframe to more easily filter the data. 
 *NOTE:* Creating a "low" and "high" filtered version of the data to see how much of a difference strictness over data sources plays. 
 ```{r}
-files_cf <- list.files(path = here("data/occ/calflora/"),
-                       full.names = TRUE)
+path = here("data/occ/calflora//")
 
-cfOcc <- data.frame()
-
-## combine all spp into one df
-for (i in 1:length(files_cf)){
-  df <- read_csv(files_cf[i])
-  
-  cfOcc <- rbind(cfOcc, df)
-}
+names <- c(
+  "a_polycarpa",
+  "p_arborea",
+  "c_pungens",
+  "l_pentachaeta",
+  "p_ciliata",
+  "a_menziesii",
+  "c_lasiophyllus"
+)
 
 ## List of accepted sources
 sources <- paste(c("BLM",
@@ -94,20 +94,28 @@ sources <- paste(c("BLM",
                    "Taylor",
                    "Hrusa"), collapse = "|")
 
-## Low filter
-calfOcc_low <- cfOcc %>% 
-  ## GPS accuracy greater than raster cell size
-  filter(`Location Quality` %in% c("high", "medium"),
-         `Accuracy: Square Meters` <= 270)
-write_csv(calfOcc_low, here("data/occ/calflora/combined_lowfilter.csv"))
 
+for (i in 1:length(names)) {
+  
+  ## Read in data
+  df <- read_csv(paste0(path, "download/", names[i], "_calflora.csv"))
+  
+  ## filter and keep coords
+  df_filter <- df %>% 
+    ## "LOW" filter criteria
+    filter(`Location Quality` %in% c("high", "medium"),
+           `Accuracy: Square Meters` <= 270,
+           Date >= "1999-10-01") 
+    ## "HIGH" filter criteria
+    # filter(str_detect(.$Source, sources))
+    
+  ## export
+  write_csv(df_filter, paste0(path, names[i], "_calflora_lowFilter.csv"))
+}
 
-## High filter
-calfOcc_high <- calfOcc_low %>% 
-  filter(str_detect(.$Source, sources))
-write_csv(calfOcc_high, here("data/occ/calflora/combined_highfilter.csv"))
   
 ```
+
 
 
 ### GBIF
@@ -145,272 +153,258 @@ names <- c(
 ## Loop through spp list and save each
 for (i in 1:length(taxon_keys)) {
   ### download filtered data for A. polycarpa
-gbif_download <- occ_download(pred_in("taxonKey", taxon_keys[i]),
-                       ## remove geospatial issues
-                       pred("hasGeospatialIssue", FALSE),
-                       ## ensure coords
-                       pred("hasCoordinate", TRUE),
-                       ## remove "absent" occurences
-                       pred("occurrenceStatus", "PRESENT"),
-                       ## within US
-                       pred("country", "US"),
-                       ## within CA
-                       pred("stateProvince", "California"),
-                       ## uncertainty less than 5000m
-                       #pred_lt("coordinateUncertaintyInMeters",5000),
-                       ## output as CSV
-                       format = "SIMPLE_CSV")
-
-### check on download status
-occ_download_wait(gbif_download)
-
-### import GBIF data into env and filter using CoordinateCleaner pkg
- species <- occ_download_get(gbif_download, 
-                             path = here("data/occ/gbif/zips/"),
-                             overwrite = TRUE) %>%
-   occ_download_import() %>% 
-   ## set lowercase column names to work with CC
-   setNames(tolower(names(.))) %>% 
-   ## filter out duplicate points
-   distinct(decimallongitude, decimallatitude, 
-            specieskey, datasetkey, .keep_all = TRUE) %>% 
-   ## filter known uncertainty below 270 and keep NAs
-   filter(coordinateuncertaintyinmeters < 270 | is.na(coordinateuncertaintyinmeters)) %>% 
-   ## known inaccurate default values
-   filter(!coordinateuncertaintyinmeters %in% c(301,3036,999,9999)) %>% 
-   ## remove herbaria/zoo locations
-   cc_inst(lon = "decimallongitude", lat = "decimallatitude",
-           buffer = 270, value = "clean", verbose = TRUE) %>% 
-   ## remove ocean values
-   cc_sea(lon = "decimallongitude", lat = "decimallatitude")
- 
- ## export file
- write_csv(species, paste0(here("data/occ/gbif//"),names[i],"_gbif.csv"))
- 
- ## Rename as local variable
- assign(names[i], species)
-}
+  gbif_download <- occ_download(pred_in("taxonKey", taxon_keys[i]),
+                         ## remove geospatial issues
+                         pred("hasGeospatialIssue", FALSE),
+                         ## ensure coords
+                         pred("hasCoordinate", TRUE),
+                         ## remove "absent" occurences
+                         pred("occurrenceStatus", "PRESENT"),
+                         ## within US
+                         pred("country", "US"),
+                         ## within CA
+                         pred("stateProvince", "California"),
+                         ## uncertainty less than 5000m
+                         #pred_lt("coordinateUncertaintyInMeters",5000),
+                         ## output as CSV
+                         format = "SIMPLE_CSV")
+  
+  ### check on download status
+  occ_download_wait(gbif_download)
+  
+  ### import GBIF data into env and filter using CoordinateCleaner pkg
+   species <- occ_download_get(gbif_download, 
+                               path = here("data/occ/gbif/zips/"),
+                               overwrite = TRUE) %>%
+     occ_download_import() %>% 
+     ## set lowercase column names to work with CC
+     setNames(tolower(names(.))) %>% 
+     ## filter out duplicate points
+     distinct(decimallongitude, decimallatitude, 
+              specieskey, datasetkey, .keep_all = TRUE) %>% 
+     ## filter known uncertainty below 270 and keep NAs
+     filter(coordinateuncertaintyinmeters < 270 | 
+              is.na(coordinateuncertaintyinmeters)) %>% 
+     ## known inaccurate default values
+     filter(!coordinateuncertaintyinmeters %in% c(301,3036,999,9999)) %>% 
+     ## remove herbaria/zoo locations
+     cc_inst(lon = "decimallongitude", lat = "decimallatitude",
+             buffer = 270, value = "clean", verbose = TRUE) %>% 
+     ## remove ocean values
+     cc_sea(lon = "decimallongitude", lat = "decimallatitude") %>% 
+     ## remove points before 2000 wy
+     filter(eventdate >= "1999-10-01")
+   
+   ## export file
+   write_csv(species, paste0(here("data/occ/gbif//"),names[i],"_gbif.csv"))
+   
+} ## END LOOP
 ```
 
 
-## Loop through spp list and save each
-for (i in 1:length(taxon_keys)) {
-  ### download filtered data for A. polycarpa
-gbif_download <- occ_download(pred_in("taxonKey", taxon_keys[i]),
-                       ## remove geospatial issues
-                       pred("hasGeospatialIssue", FALSE),
-                       ## ensure coords
-                       pred("hasCoordinate", TRUE),
-                       ## remove "absent" occurences
-                       pred("occurrenceStatus", "PRESENT"),
-                       ## within US
-                       pred("country", "US"),
-                       ## within CA
-                       pred("stateProvince", "California"),
-                       ## uncertainty less than 5000m
-                       #pred_lt("coordinateUncertaintyInMeters",5000),
-                       ## output as CSV
-                       format = "SIMPLE_CSV")
-
-### check on download status
-occ_download_wait(gbif_download)
-
-### import GBIF data into env and filter using CoordinateCleaner pkg
-<<<<<<< HEAD
- species <- occ_download_get(gbif_download, 
-                             path = here("data/occ/gbif/zips/"),
-                             overwrite = TRUE) %>%
-   occ_download_import() %>% 
-   ## set lowercase column names to work with CC
-   setNames(tolower(names(.))) %>% 
-   ## filter out duplicate points
-   distinct(decimallongitude, decimallatitude, 
-            specieskey, datasetkey, .keep_all = TRUE) %>% 
-   ## filter known uncertainty below 270 and keep NAs
-   filter(coordinateuncertaintyinmeters < 270 | is.na(coordinateuncertaintyinmeters)) %>% 
-   ## known inaccurate default values
-   filter(!coordinateuncertaintyinmeters %in% c(301,3036,999,9999)) %>% 
-   ## remove herbaria/zoo locations
-   cc_inst(lon = "decimallongitude", lat = "decimallatitude",
-           buffer = 270, value = "clean", verbose = TRUE) %>% 
-   ## remove ocean values
-   cc_sea(lon = "decimallongitude", lat = "decimallatitude")
- 
- ## export file
- write_csv(species, paste0(here("data/occ/gbif//"),names[i],"_gbif.csv"))
- 
- ## Rename as local variable
- assign(paste0(names[i], "_gbif"), species)
-}
-=======
-p_arborea2 <- occ_download_get(gbif_download, 
-                              path = here("data/occ/gbif/zips/"),
-                              overwrite = TRUE) %>%
-  occ_download_import() %>% 
-  ## set lowercase column names to work with CC
-  setNames(tolower(names(.))) %>% 
-  ## filter out duplicate points
-  distinct(decimallongitude, decimallatitude, specieskey, datasetkey, .keep_all = TRUE) %>% 
-  ## filter known uncertainty below 270 and keep NAs
-  filter(coordinateuncertaintyinmeters < 270 | is.na(coordinateuncertaintyinmeters)) %>% 
-  ## known inaccurate default values
-  filter(!coordinateuncertaintyinmeters %in% c(301,3036,999,9999)) %>% 
-  ## remove herbaria/zoo locations
-  cc_inst(lon = "decimallongitude", lat = "decimallatitude",
-          buffer = 270, value = "clean", verbose = TRUE) 
-  ## remove accidental ocean values
-  cc_sea(lon = "decimallongitude", lat = "decimallatitude")
->>>>>>> b70970b9f8773e7f294a1131df0314f0c6a4adc0
-```
-
-
+**OLD TEST CODE:**
 Pull in CalFlora data for A. polycarpa, merge with GBIF data, and determine how many duplicates there are
 ```{r}
-apoly_calf <- read_csv("data/a_polycarpa_calflora.csv") %>% 
-  janitor::clean_names()
-
-## subset of calflora data
-apoly_calf_sub <- apoly_calf %>% 
-  dplyr::select(c(latitude, longitude, date)) %>% 
-  #mutate(source = "calflora") %>% 
-  mutate(latitude = round(latitude, 4))
-
-## subset of gbif data
-apoly_gbif_sub <- a_poly %>% 
-  dplyr::select(c(decimallatitude, decimallongitude, eventdate)) %>% 
-  rename(latitude = decimallatitude, 
-         longitude = decimallongitude,  
-         date = eventdate) %>% 
-  #mutate(source = "gbif") %>% 
-  mutate(latitude = round(latitude, 4))
-
-apoly_gbif_sub$id <- as.character(apoly_gbif_sub$id)
-apoly_gbif_sub$date <- as.Date(apoly_gbif_sub$date)
-
-
-test <- inner_join(apoly_calf_sub, apoly_gbif_sub)
-
-## When rounded to 4 (10m), only two points match. These are both iNaturalist entiries
-## that came in both databases
-
-apoly_gbif2 <- apoly_gbif_sub %>% 
-  mutate(latitude = round(latitude, 2),
-         longitude = round(longitude, 2))
-
-apoly_calf2 <- apoly_calf_sub %>% 
-  mutate(latitude = round(latitude, 2),
-         longitude = round(longitude, 2))
-
-test2 <- inner_join(apoly_gbif2, apoly_calf2)
-
-## only 5 matching
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## merge
-apoly_merge <- rbind(apoly_calf_sub, apoly_gbif_sub)
-
-## round lat
-apoly_merge_sub <- apoly_merge %>% 
-  mutate(latitude = round(latitude, 4)) %>% 
-  group_by(date)
-
-
+# apoly_calf <- read_csv("data/a_polycarpa_calflora.csv") %>% 
+#   janitor::clean_names()
+# 
+# ## subset of calflora data
+# apoly_calf_sub <- apoly_calf %>% 
+#   dplyr::select(c(latitude, longitude, date)) %>% 
+#   #mutate(source = "calflora") %>% 
+#   mutate(latitude = round(latitude, 4))
+# 
+# ## subset of gbif data
+# apoly_gbif_sub <- a_poly %>% 
+#   dplyr::select(c(decimallatitude, decimallongitude, eventdate)) %>% 
+#   rename(latitude = decimallatitude, 
+#          longitude = decimallongitude,  
+#          date = eventdate) %>% 
+#   #mutate(source = "gbif") %>% 
+#   mutate(latitude = round(latitude, 4))
+# 
+# apoly_gbif_sub$id <- as.character(apoly_gbif_sub$id)
+# apoly_gbif_sub$date <- as.Date(apoly_gbif_sub$date)
+# 
+# 
+# test <- inner_join(apoly_calf_sub, apoly_gbif_sub)
+# 
+# ## When rounded to 4 (10m), only two points match. These are both iNaturalist entiries
+# ## that came in both databases
+# 
+# apoly_gbif2 <- apoly_gbif_sub %>% 
+#   mutate(latitude = round(latitude, 2),
+#          longitude = round(longitude, 2))
+# 
+# apoly_calf2 <- apoly_calf_sub %>% 
+#   mutate(latitude = round(latitude, 2),
+#          longitude = round(longitude, 2))
+# 
+# test2 <- inner_join(apoly_gbif2, apoly_calf2)
+# 
+# ## only 5 matching
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# ## merge
+# apoly_merge <- rbind(apoly_calf_sub, apoly_gbif_sub)
+# 
+# ## round lat
+# apoly_merge_sub <- apoly_merge %>% 
+#   mutate(latitude = round(latitude, 4)) %>% 
+#   group_by(date)
+# 
+# 
+# ```
+# 
+# ```{r}
+# parb_calf <- read_csv(here("data/p_arborea_calflora.csv")) %>% 
+#   janitor::clean_names()
+# 
+# ## subset of calflora data
+# parb_calf_sub <- parb_calf %>% 
+#   dplyr::select(c(latitude, longitude, date)) %>% 
+#   #mutate(source = "calflora") %>% 
+#   mutate(latitude = round(latitude, 4))
+# 
+# ## subset of gbif data
+# parb_gbif_sub <- p_arborea %>% 
+#   dplyr::select(c(decimallatitude, decimallongitude, eventdate)) %>% 
+#   rename(latitude = decimallatitude, 
+#          longitude = decimallongitude,  
+#          date = eventdate) %>% 
+#   #mutate(source = "gbif") %>% 
+#   mutate(latitude = round(latitude, 4))
+# 
+# parb_gbif_sub$id <- as.character(apoly_gbif_sub$id)
+# parb_gbif_sub$date <- as.Date(parb_gbif_sub$date)
+# 
+# 
+# test <- inner_join(parb_calf_sub, parb_gbif_sub)
+# 
+# ## When rounded to 4 (10m), only two points match. These are both iNaturalist entiries
+# ## that came in both databases
+# 
+# parb_gbif2 <- parb_gbif_sub %>% 
+#   mutate(latitude = round(latitude, 2),
+#          longitude = round(longitude, 2))
+# 
+# parb_calf2 <- parb_calf_sub %>% 
+#   mutate(latitude = round(latitude, 2),
+#          longitude = round(longitude, 2))
+# 
+# test2 <- inner_join(parb_gbif2, parb_calf2)
+# 
+# ## only 5 matching
 ```
 
+
+
+
+
+# Spatial Thinning
+
+BCMv8 data are available at 270m resolution. To avoid biasing the model to oversampled regions, only one occurrence per 270m pixel will be used for extraction. We'll first combine occurrence data by species across all data sources, then thin and filter the data to be used in the SDM model. 
 ```{r}
-parb_calf <- read_csv(here("data/p_arborea_calflora.csv")) %>% 
-  janitor::clean_names()
+## file paths 
+path_gbif <- here("data/occ/gbif//")
+path_calflora <- here("data/occ/calflora//")
+path_vegbank <- here("data/occ/vegbank//")
 
-## subset of calflora data
-parb_calf_sub <- parb_calf %>% 
-  dplyr::select(c(latitude, longitude, date)) %>% 
-  #mutate(source = "calflora") %>% 
-  mutate(latitude = round(latitude, 4))
-
-## subset of gbif data
-parb_gbif_sub <- p_arborea %>% 
-  dplyr::select(c(decimallatitude, decimallongitude, eventdate)) %>% 
-  rename(latitude = decimallatitude, 
-         longitude = decimallongitude,  
-         date = eventdate) %>% 
-  #mutate(source = "gbif") %>% 
-  mutate(latitude = round(latitude, 4))
-
-parb_gbif_sub$id <- as.character(apoly_gbif_sub$id)
-parb_gbif_sub$date <- as.Date(parb_gbif_sub$date)
-
-
-test <- inner_join(parb_calf_sub, parb_gbif_sub)
-
-## When rounded to 4 (10m), only two points match. These are both iNaturalist entiries
-## that came in both databases
-
-parb_gbif2 <- parb_gbif_sub %>% 
-  mutate(latitude = round(latitude, 2),
-         longitude = round(longitude, 2))
-
-parb_calf2 <- parb_calf_sub %>% 
-  mutate(latitude = round(latitude, 2),
-         longitude = round(longitude, 2))
-
-test2 <- inner_join(parb_gbif2, parb_calf2)
-
-## only 5 matching
-```
-
-
-
-## Spatial and Temporal Thinning
-
-BCMv8 data are available at 270m resolution. To avoid biasing the model to oversampled regions, only one occurrence per 270m pixel will be used for extraction. Additionally, we are only interested in species occurrences in the water years 2000-2022. We'll thin and filter the data to be used in the SDM model. 
-```{r}
-## Read in species occurrence data
-sppOcc <- read_csv(here('data/species_occurrence_GBIF/a_polycarpa.csv'))
-## Read in reference raster
-aet2020 <- rast(here('data/bcmv8/2021_2022/aet2020dec.tif')) %>% 
+## reference raster for thinning
+rast <- rast(here('data/bcmv8/2000_2022/aet2020dec.tif')) %>% 
   project(y = "WGS84")
 
-## Testing enmSdmX -----------------------------------------
+## spp names
+names <- c(
+  "a_polycarpa",
+  "p_arborea",
+  "c_pungens",
+  "l_pentachaeta",
+  "p_ciliata",
+  "a_menziesii",
+  "c_lasiophyllus"
+)
 
-## thin data to one pt per raster cell (270m)
-sppThin <- elimCellDuplicates(sppOcc, aet2020, longLat = c("decimallongitude", "decimallatitude")) %>% 
-  dplyr::select(c("decimallongitude", "decimallatitude")) %>%
-  rename(Longitude = decimallongitude,
-         Latitude = decimallatitude)
+## Read in, merge, thin, and export for each spp on list
+for (i in 1:length(names)) {
+  ## GBIF ---------------------
+  ### If no data for that species, doesn't contribute to merged file
+  if (length(list.files(path_gbif, pattern = names[i])) == 0) {
+    gbif = NULL
+  } else {
+    gbif <- read_csv(paste0(path_gbif, names[i], "_gbif.csv")) %>% 
+      ## only select vars of interest
+      dplyr::select(c(gbifid, decimallatitude, decimallongitude, eventdate)) %>% 
+      ## consistent var names
+      rename(id = gbifid,
+             lat = decimallatitude,
+             lon = decimallongitude,
+             date = eventdate) %>%
+             ## add source
+      mutate(source = "gbif",
+             ## remove time from date
+             date = as.Date(date))
+  }
+  
+  ## CalFlora -----------------
+  if (length(list.files(path_calflora, pattern = names[i])) == 0) {
+    calflora = NULL
+  } else {
+    calflora <- read_csv(paste0(path_calflora, names[i], "_calflora_lowFilter.csv")) %>% 
+      dplyr::select(c(ID, Latitude, Longitude, Date)) %>% 
+      rename(id = ID,
+             lat = Latitude,
+             lon = Longitude,
+             date = Date) %>% 
+      mutate(source = "calflora")
+  }
 
-## Now filter to water years of interest
-sppThin_2000_2022 <- sppThin %>% 
-  ## only keep vars of interest
-  dplyr::select(gbifid, species, month, year, 
-                decimallatitude, decimallongitude) %>% 
-  ## Keep Oct 1999 through Sep 2022
-  filter(year >= 2000 | (year == 1999 & month %in% c(10,11,12))) %>% 
-  filter(year <= 2022) %>% 
-  filter(!(year == 2022 & month %in% c(10, 11, 12)))
+  ## VegBank ------------------
+  if (length(list.files(path_vegbank, pattern = names[i])) == 0) {
+    vegbank = NULL
+  } else {
+    vegbank <- read_csv(paste0(path_vegbank, names[i], "_vegbank.csv")) %>% 
+      dplyr::select(c(observation_id, latitude, longitude, date)) %>% 
+      rename(id = observation_id, 
+             lat = latitude,
+             lon = longitude) %>% 
+      mutate(source = "vegbank") %>% 
+      ## check for incorred coord entries
+      filter(lon < 0,
+             lat > 0)
+  }
+           
+
+  ## Merge and thin -----------
+  combo <- rbind(gbif, calflora, vegbank)
+  
+  comboThin <- elimCellDuplicates(combo, rast, longLat = c("lon", "lat"))
+  
+  ## Export
+  write_csv(comboThin, paste0(here("data/occ/combined_spp_occ//"), 
+                              names[i],
+                              "_lowFilter.csv"))
+} ## END LOOP
 
 
-# ## Double-check no duplicate points!
-# test <- sppThin_2000_2022 %>%
-#   group_by(decimallatitude) %>%
-#   group_by(decimallongitude) %>%
-#   distinct(decimallatitude, decimallongitude, .keep_all = T)
+
+```
 
 
-## Save 
-write_csv(sppThin_2000_2022,
-          here('data/species_occurrence_GBIF/a_polycarpa_thinned.csv'))
+
+```{r}
 
 ## Testing spThin -----------------------------------------
 # thinTest <- thin(
@@ -447,7 +441,8 @@ write_csv(sppThin_2000_2022,
 
 
 
-## Generate background points
+# Generate background points
+
 The sample with enmSdmX is faster and compatible with terra, but the dismo one has the option of inputting occurrence data and NOT sampling those points... which may be a useful feature. For now using the Dismo fxn. 
 ```{r}
 ### Set up data inputs ----------------------------------------------
@@ -494,55 +489,4 @@ write_csv(backSamp, here('data/species_occurrence_GBIF/background_points.csv'))
 
 
 
-
-
-
-
-
-
-Eventually the SDM will be done with Dismo, but for now I'm starting with Wallace. Although GBIF datasets can be directly queried in the Wallace interface, you cannot customize the data filters as easily as using `rgbif` and `CoordinateCleaner`. As such, we'll have some temporary code that exports occurrence data locally that can be uploaded to Wallace interface.
-
-```{r}
-write_csv(a_poly, here("data/species_occurrence_GBIF/a_polycarpa.csv"))
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-Older version of cleaning data when manually downloading/reading in:
-
-```{r}
-### Fxn to read in and clean information from CSV
-sp_filter <- function(filename) {
-  ## read in data
-  raw <- read_csv(here(paste0("data/species_occurrence_GBIF/raw/", filename))) %>% 
-    janitor::clean_names()
-  
-  ## filter data
-  filtered <- raw %>% 
-    ## only keep obs in CA
-    filter(state_province == "California") %>% 
-    ## remove data with no coords
-    drop_na(decimal_latitude, decimal_longitude) %>% 
-    ## remove points with incorrect coords
-    filter(!str_detect(issue, "COUNTRY_COORDINATE_MISMATCH"))
-  
-  return(filtered)
-}
-
-### test with a. poly
-a_polycarpa <- sp_filter("A_polycarpa.csv")
-
-
-blah <- read_csv(here("data/species_occurrence_GBIF/raw/A_polycarpa.csv"))
-```
 
