@@ -17,14 +17,13 @@ library(enmSdmX)              ## spatially thinning data
 library(dismo)                ## generating background points
 ```
 
+This script filters and creates both the species occurrence and background point data files used for the species distribution model in the `kern_sdm` markdown.
 
 # Download/import Occurrence Data
-
 This first section will read in, filter, and export species occurrence data from three different sources: GBIF, VegBank, and CalFlora. Both VegBank and CalFlora data are downloaded directly from their websites. GBIF data is imported and filtered using the `rgbif` and `CoordinateCleaner` packages, respectively. 
 
 
 ### CalFlora
-
 This data was directly downloaded from the CalFlora website, found here:
 https://www.calflora.org/entry/observ.html
 
@@ -79,7 +78,6 @@ for (i in 1:length(names)) {
 
 
 ### VegBank
-
 This data was downloaded directly from the VegBank website, found here: http://vegbank.org/vegbank/forms/plot-query.jsp. 
 
 Data for all plots of one spp were downloaded and zipped as a "batch". Information about the plots, contributors, and all the spp and % cover are written as different CSV files. 
@@ -127,7 +125,6 @@ for (i in 1:length(names)) {
 
 
 ### GBIF
-
 This script uses the `rgbif` package to directly download species occurence data from GBIF. To use the `occ_download()` function, this requires setting your GBIF login details. Details on how to set this can be found at: 
 https://docs.ropensci.org/rgbif/articles/gbif_credentials.html
 
@@ -214,7 +211,6 @@ for (i in 1:length(taxon_keys)) {
 
 
 # Merge and Spatially Thin
-
 BCMv8 data are available at 270m resolution. To avoid biasing the model to oversampled regions, only one occurrence per 270m pixel will be used for extraction. We'll first combine occurrence data by species across all data sources, then thin and filter the data to be used in the SDM model. 
 ```{r}
 ## file paths 
@@ -306,7 +302,6 @@ for (i in 1:length(names)) {
 
 
 # Generate background points
-
 Finally, random background occurrence points will be generated across all of California using the `dismo` package and exported as a CSV file. 
 
 **NOTE:** Updated from 40 to 150 pts per mo/yr (11,040 to 41,400 total). Rather than use points from all of CA to create SDM model, we'll only be using points within a buffered distance from occurrence points for a species. The total number was increased to ensure that there are enough within the sample of background points taken to train the model. This methodoly may change later.
