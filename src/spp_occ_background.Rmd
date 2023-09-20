@@ -286,7 +286,10 @@ for (i in 1:length(names)) {
            
 
   ## Merge and thin -----------
-  combo <- rbind(gbif, calflora, vegbank)
+  combo <- rbind(gbif, calflora, vegbank) %>% 
+    mutate(year = lubridate::year(date),
+           month = lubridate::month(date),
+           .before = source)
   comboThin <- elimCellDuplicates(combo, rast, longLat = c("lon", "lat"))
   
   ## Export
@@ -294,8 +297,6 @@ for (i in 1:length(names)) {
                               names[i],
                               "_lowFilter.csv"))
 } ## END LOOP
-
-
 
 ```
 
