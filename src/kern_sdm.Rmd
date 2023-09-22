@@ -116,8 +116,20 @@ pathSoil = here("data/ssurgo//")
 
 ## Occurrence extraction:
 ```{r}
+names <- c(
+  "a_polycarpa",
+  "p_arborea",
+  "c_pungens",
+  "l_pentachaeta",
+  "p_ciliata",
+  "a_menziesii",
+  "c_lasiophyllus"
+)
+
 ## Read in species occurrence df
-sppOcc <- read_csv(here('data/occ/combined_spp_occ/a_menziesii_lowFilter.csv'))
+sppOcc <- read_csv(paste0(here('data/occ/combined_spp_occ//'),
+                          names[1],
+                          "_lowFilter.csv"))
 
 ## Use fxn to extract env data at location of occurrences
 occExtract_2000_2022 <- env_extract(startYear=2000, endYear=2022, 
@@ -155,15 +167,15 @@ backOcc_crop_sf = st_as_sf(crop(vect(backOcc,
 ## back into df to use in env_extract() fxn.
 ## Need lon/lat as separate vars for fxn
 backOcc_crop_df = cbind((data.frame(backOcc_crop_sf)),
-                        (data.frame(st_coordinates(backOcc_crop_sf)))) %>% 
+                        (data.frame(st_coordinates(backOcc_crop_sf)))) %>%
   dplyr::select(!geometry)
 
 
 ## Use fxn to extract for background points
 ## NOTE: this will take a while to run
-backExtract_2000_2022 <- env_extract(startYear=2000, endYear=2022, 
-                                     pathMonth, pathQuarter, 
-                                     backOcc_crop_df, 
+backExtract_2000_2022 <- env_extract(startYear=2000, endYear=2022,
+                                     pathMonth, pathQuarter,
+                                     backOcc_crop_df,
                                      lon = 'X', lat = 'Y')
 
 ## Export
