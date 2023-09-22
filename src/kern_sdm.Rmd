@@ -43,6 +43,30 @@ Publicly available BCMv8 files are in .asc format. ASCII files have associated c
 # asc_to_tif(filepath)
 ```
 
+# SSURGO data
+We need to change the SSURGO data to match the resolution and spatial extent of the the BCM layers.
+```{r}
+## reference raster
+bcm = rast(here("data/bcmv8/2000_2022/ppt2020jan.tif"))
+
+## ssurgo rasters
+ph = rast(here("data/ssurgo/ssurgo_ph.tif"))
+som = rast(here("data/ssurgo/ssurgo_percent_som.tif"))
+
+## change resolution from 90m to 270m (factor of 3) 
+ph_270 <- aggregate(ph, fact=3, fun="mean", na.rm=TRUE) %>% 
+  project(y = bcm)
+## resample to ensure same extent
+ph_resamp <- resample(ph_270, bcm, method="bilinear")
+## export
+writeRaster(ph_resamp, here("data/ssurgo/ssurgo_ph_270m.tif"))
+
+## same with SOM
+som_270 <- aggregate(som, fact=3, fun="mean", na.rm=TRUE) %>% 
+  project(y=bcm)
+som_resamp <- resample(som_270, bcm, method="bilinear")
+writeRaster(som_resamp, here("data/ssurgo/ssurgo_som_270m.tif"))
+```
 
 
 # Quarterly rasters
@@ -86,16 +110,20 @@ source(here('R/env_extract.R'))
 ## Define fxn variables
 pathMonth = here("data/bcmv8/2000_2022//")
 pathQuarter = here("data/bcmv8/quarterly_avgs//")
+pathSoil = here("data/ssurgo//")
 ```
+
 
 ## Occurrence extraction:
 ```{r}
 ## Read in species occurrence df
-sppOcc <- read_csv(here('data/occ/combined_spp_occ/a_polycarpa_lowFilter.csv'))
+sppOcc <- read_csv(here('data/occ/combined_spp_occ/a_menziesii_lowFilter.csv'))
 
 ## Use fxn to extract env data at location of occurrences
 occExtract_2000_2022 <- env_extract(startYear=2000, endYear=2022, 
-                                    pathMonth, pathQuarter, sppOcc)
+                                    pathMonth, pathQuarter, pathSoil, sppOcc) %>% 
+  rename(ph = ssurgo_ph,
+         per_som = ssurgo_percent_som)
 
 ## Export
 write_csv(occExtract_2000_2022, here('data/swd/occExtract_2000_2022.csv'))
@@ -121,13 +149,13 @@ sppZone <- convHull(vect(sppOcc,
 backOcc_crop_sf = st_as_sf(crop(vect(backOcc, 
                                      geom = c("x", "y"),
                                      crs = "WGS84"),
-                                zone))
+                                sppZone))
 
 ## Finally, turn cropped background pts
 ## back into df to use in env_extract() fxn.
 ## Need lon/lat as separate vars for fxn
-backOcc_crop_df = cbind((data.frame(backOcc_crop)),
-                        (data.frame(st_coordinates(backOcc_crop)))) %>% 
+backOcc_crop_df = cbind((data.frame(backOcc_crop_sf)),
+                        (data.frame(st_coordinates(backOcc_crop_sf)))) %>% 
   dplyr::select(!geometry)
 
 

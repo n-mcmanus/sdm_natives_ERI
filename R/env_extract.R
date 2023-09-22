@@ -14,15 +14,16 @@
 #' @param endYear character or numeric. The last water year in dataset.
 #' @param pathMonth character. File path to directory with monthly rasters.
 #' @param pathQuarter character. File path to directory with quarterly data (generated from `quarterly_rast()` function).
+#' @param pathSoil character. File path to directory with SSURGO soil data.
 #' @param sppOcc data frame. Contains species occurrence (or background points) data for extraction.
-#' @param lon character. Variable name for longitude values in sppOcc df (default = "decimallongitude")
-#' @param lat character. Variable name for the latitude values in sppOcc df (default = "decimallatitude")
+#' @param lon character. Variable name for longitude values in sppOcc df (default = "lon")
+#' @param lat character. Variable name for the latitude values in sppOcc df (default = "lat")
 #' @param crs character. The coordinate reference system of the spp occurrence data (default = "WGS84")
 #' @return data frame with environmental values at point of species observation
 
 
-env_extract <- function(startYear, endYear, pathMonth, pathQuarter, sppOcc,
-                       lon = "decimallongitude", lat = "decimallatitude", crs = "WGS84") {
+env_extract <- function(startYear, endYear, pathMonth, pathQuarter, pathSoil,
+                        sppOcc, lon = "lon", lat = "lat", crs = "WGS84") {
   
   ## Warnings
   if (startYear < 2000)
@@ -54,9 +55,9 @@ env_extract <- function(startYear, endYear, pathMonth, pathQuarter, sppOcc,
                        char = "=")
 
   
-  ## Extract loop --------------------------------------------------
+  ## BCM Extract loop --------------------------------------------------
   ## empty df to store loop results
-  extract_df <- data.frame()
+  bcmExtract_df <- data.frame()
   
   ## LOOP START 
   for (i in 1:nrow(dates_df)) {
@@ -64,12 +65,13 @@ env_extract <- function(startYear, endYear, pathMonth, pathQuarter, sppOcc,
     filesMonth <- list.files(path = pathMonth, 
                         ## only list those with matching yr/mo in name
                         pattern= paste0(dates_df$year[i], dates_df$mon[i]), 
-                        full=F)
+                        full.names=F)
     
     ## List of quarterly raster files
     filesQuarter <- list.files(path = pathQuarter,
                                pattern = paste0(dates_df$wy[i]),
-                               full = F)
+                               full.names = F)
+    
     
     ## Stack all rasters
     env_stack <- terra::rast(c(paste0(pathMonth,filesMonth), 
@@ -105,7 +107,7 @@ env_extract <- function(startYear, endYear, pathMonth, pathQuarter, sppOcc,
           cbind(sppOcc_filter, .)
         
         ## append results to df
-        extract_df <- rbind(extract_df, sppExtract)
+        bcmExtract_df <- rbind(bcmExtract_df, sppExtract)
       
     } else {
       ## If no obs for a yr/mo, skip
@@ -116,128 +118,29 @@ env_extract <- function(startYear, endYear, pathMonth, pathQuarter, sppOcc,
     
   } ### END LOOP
   
-  return(extract_df)
   
-  # 
-  # 
-  # ## Quarterly extract loop ----------------------------------------------------
-  # 
-  # ### Winter ppt ------------------------------------------
-  # ngroups <- nrow(dates_df)/12
-  # winter_df <- dates_df %>%  
-  #   mutate(wy = rep(startYear:endYear, each = 12))
-  # 
-  # #### for-loop 1
-  # for (i in 1:length(unique(winter_df$group))) {
-  #   quarter_df <- winter_df %>% 
-  #     filter(group == i)
-  #   
-  #   ## Read in raster
-  #   winter_rast <- terra::rast(paste0(pathQuarter, 
-  #                                     "ppt", 
-  #                                     quarter_df$year[2],
-  #                                     "winter.tif"))
-  #   ## Rename rast (will become var name in extract df)
-  #   names(winter_rast) <- "ppt_winter"
-  #   
-  #   #### for-loop 2
-  #   for (j in 1:nrow(quarter_df)) {
-  #     ## Filter obs to yr/mo
-  #     sppOcc_winter <- sppOcc %>% 
-  #       filter(year == quarter_df[j,1],
-  #              month == quarter_df[j,3])
-  #     
-  #     
-  #     ## If filtered df has obs, then vectorize and extract
-  #     if(nrow(sppOcc_winter) > 0) {
-  #       ## vectorize and reproj to env data crs
-  #       sppOcc_winter_vect <- sppOcc_winter %>%
-  #         terra::vect(geom = c(lon, lat), crs = crs) %>%
-  #         terra::project(y = crs(winter_rast))
-  #       
-  #       ## extract and tidy df
-  #       sppExtract_winter <- extract(winter_rast, 
-  #                                    sppOcc_winter_vect, 
-  #                                    method = "simple") %>%
-  #         ## merge occ data w/extract data
-  #         cbind(sppOcc_winter, .) %>%
-  #         dplyr::select(-ID)
-  #       
-  #       ## append results to df
-  #       extractWinter_df <- rbind(extractWinter_df, sppExtract_winter)
-  #       
-  #     } else {
-  #       ## If no obs for a yr/mo, skip
-  #       next
-  #     } ### END if/else statement
-  #   }### END for-loop 2
-  #   
-  # }### END for-loop 1
-  # 
-  # 
-  # ## Join winter and monthly
-  # extract_df <- left_join(x=extractMonth_df, y=extractWinter_df)
-  # 
-  # 
-  # ### Summer tmax ------------------------------------------------
-  # summer_df <- dates_df %>% 
-  #   filter(mon %in% c('jun', 'jul', 'aug')) %>% 
-  #   mutate(group = rep(1:(nrow(.)/3), each = 3))
-  # 
-  # #### for-loop 1
-  # for (i in 1:length(unique(summer_df$group))) {
-  #   quarter_df <- summer_df %>% 
-  #     filter(group == i)
-  #   
-  #   ## Read in raster
-  #   summer_rast <- terra::rast(paste0(pathQuarter, 
-  #                                     "tmx", 
-  #                                     quarter_df$year[2],
-  #                                     "summer.tif"))
-  #   names(summer_rast) <- "tmx_summer"
-  #   
-  #   #### for-loop 2
-  #   for (j in 1:nrow(quarter_df)) {
-  #     ## Filter obs to yr/mo
-  #     sppOcc_summer <- sppOcc %>% 
-  #       filter(year == quarter_df[j,1],
-  #              month == quarter_df[j,3])
-  #     
-  #     
-  #     ## If filtered df has obs, then vectorize and extract
-  #     if(nrow(sppOcc_summer) > 0) {
-  #       ## vectorize and reproj to env data crs
-  #       sppOcc_summer_vect <- sppOcc_summer %>%
-  #         terra::vect(geom = c(lon, lat), crs = crs) %>%
-  #         terra::project(y = crs(summer_rast))
-  #       
-  #       ## extract and tidy df
-  #       sppExtract_summer <- extract(summer_rast, 
-  #                                    sppOcc_summer_vect, 
-  #                                    method = "simple") %>%
-  #         ## merge occ data w/extract data
-  #         cbind(sppOcc_summer, .) %>%
-  #         dplyr::select(-ID)
-  #       
-  #       ## append results to df
-  #       extractSummer_df <- rbind(extractSummer_df, sppExtract_summer)
-  #       
-  #     } else {
-  #       ## If no obs for a yr/mo, skip
-  #       next
-  #     } ### END if/else statement
-  #   }### END for-loop 2
-  #   
-  # }### END for-loop 1
-  # 
-  # 
-  # ## Join summer and monthly
-  # extractAll_df <- left_join(x=extract_df, y=extractSummer_df)
-  # 
-  # 
-  # 
-  # 
-  # return(extractAll_df)
+  ## Extract for soil ------------------------------------------
+  
+  ## List of soil raster files
+  filesSoil <- list.files(path = pathSoil,
+                          pattern = "_270m.tif",
+                          full.names = TRUE)
+  ## Stack them
+  soil_stack = terra::rast(c(filesSoil))
+  
+  ## Vectorize
+  sppOcc_vect <- bcmExtract_df %>%
+    terra::vect(geom = c(lon, lat), crs = crs) %>%
+    terra::project(y = crs(soil_stack))
+  
+  ## Extract
+  extract_df <- extract(soil_stack, sppOcc_vect, method = "simple") %>% 
+    dplyr::select(-ID) %>% 
+    ## merge occ data w/extract data
+    cbind(bcmExtract_df, .)
+  
+  
+    return(extract_df)
   
   
 } ### end fxn
