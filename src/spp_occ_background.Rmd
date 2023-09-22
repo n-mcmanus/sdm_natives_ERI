@@ -315,16 +315,16 @@ r <- raster(rast)
 ## Create random background points
 ## Random samples w/o replacement
 backOcc <- randomPoints(mask = r, 
-                        n = 41400,  
+                        n = 27600,  
                         prob = FALSE)
 backOcc <- as.data.frame(backOcc)
 
 ## Assign 150 pts to each mo/yr
 ## First create df of mo/yr in wy format, then bind to pts df
-dates <- data.frame(month = rep(1:12, each = 150),
-                    year = rep(2000:2022, each = 1800))
-dates <- rbind(tail(dates, 450), head(dates, -450))
-dates[1:450, 2] = (dates[451,2] - 1)
+dates <- data.frame(month = rep(1:12, each = 100),
+                    year = rep(2000:2022, each = 1200))
+dates <- rbind(tail(dates, 300), head(dates, -300))
+dates[1:300, 2] = (dates[301,2] - 1)
 
 backSamp <- cbind(backOcc, dates)
 
