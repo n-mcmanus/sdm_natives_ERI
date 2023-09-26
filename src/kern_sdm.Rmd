@@ -17,6 +17,7 @@ library(dismo)        ## Maxent pkg
 library(rJava)        ## Needed for dismo
 library(lubridate)    ## Dates and progress bar
 library(corrplot)     ## Correlation matrix
+library(FedData)      ## Downloading SSURGO data
 ```
 
 
@@ -67,6 +68,122 @@ som_270 <- aggregate(som, fact=3, fun="mean", na.rm=TRUE) %>%
 som_resamp <- resample(som_270, bcm, method="bilinear")
 writeRaster(som_resamp, here("data/ssurgo/ssurgo_som_270m.tif"))
 ```
+
+
+
+### SSURGO import test
+Testing out importing SSURGO data with `FedData` package. Starting out with only one map area. Involves importing data, then reducing number of horizons to 1:1 with components (right now by selecting for depth?), then taking weighted avg of components to generate 1:1 join with map unit, then should be able to spatially plot info for pH, SOM, and CEC???
+```{r}
+## fxn
+not_all_na <- function(x) any(!is.na(x)) # for data cleaning
+
+## Download data (Survey area CA666 in Kern Co)
+ssurgo666 <- get_ssurgo(template = "CA666", label = "CA_666") #add put raw.dir later if this works
+
+## create chorizon, component, 
+## and mapunit dataset for aoi
+chorizon <- ssurgo666$tabular$chorizon
+component <- ssurgo666$tabular$component
+mapunit <- ssurgo666$tabular$mapunit
+
+## Quick check on number of unique values to
+## anticipate joining situation
+### Quite a few components w/o horizon level data
+# > length(unique(component$cokey))
+# [1] 821
+# > length(unique(chorizon$cokey))
+# [1] 242
+### Component data for all map units
+# > length(unique(component$mukey))
+# [1] 183
+# > length(unique(mapunit$mukey))
+# [1] 183
+
+
+## Remove variables with all NAs
+chorizon <- chorizon %>% 
+  select_if(not_all_na)
+component <- component %>% 
+  select_if(not_all_na)
+mapunit <- mapunit %>% 
+  select_if(not_all_na)
+
+## Horizon level data ---------------------------------------------
+## Finding total soil depth.... not sure why this is a step
+depth = chorizon %>% 
+  group_by(cokey) %>% 
+  summarize(total_depth = max(hzdepb.r))
+
+## Remove horizons that start below 30cm
+chorizon30 = chorizon %>% 
+  filter(hzdept.r < 30) %>% 
+  droplevels()
+
+## How many components still have more than 1 horizon
+## after filtering in last step?
+nrow(
+  chorizon30 %>% 
+    group_by(cokey) %>% 
+    summarize(count = n()) %>% 
+    filter(count > 1)
+  )
+# [1] 135
+
+## To deal w/this, we'll summarize characteristics of interest (e.g. pH, SOM, CEC)
+## w/weighted mean of horizon thickness (above 30cm cutoff)
+chorizon30_wmean = chorizon30 %>% 
+  ## find thickness of each horizon
+  mutate(thick = ifelse(hzdepb.r > 30, 30 - hzdept.r,
+                        hzdepb.r - hzdept.r)) %>% 
+  ## weighted mean of each variable by component
+  group_by(cokey) %>% 
+  summarize(om = round(weighted.mean(om.r, thick, na.rm = TRUE), 2),
+            cec = round(weighted.mean(cec7.r, thick, na.rm = TRUE), 2),
+            ph = round(weighted.mean(ph1to1h2o.r, thick),2)) %>% 
+  ## join w/depth
+  left_join(., depth, by = "cokey")
+
+
+## Component level data --------------------------------------------------------
+## filter for variables of interest
+component = component %>% 
+  dplyr::select(c(comppct.r, compname, slope.r, mukey, cokey))
+
+## join with horizon data
+component_horizon = left_join(component, chorizon30_wmean, by = "cokey")
+
+## weighted average of variables based on % component in mapunit
+full_soil = component_horizon %>% 
+  group_by(mukey) %>% 
+  summarize(om = round(weighted.mean(om, comppct.r, na.rm = TRUE),2),
+            cec = round(weighted.mean(cec, comppct.r, na.rm = TRUE), 2),
+            ph = round(weighted.mean(ph, comppct.r, na.rm = TRUE),2),
+            slope = round(weighted.mean(slope.r, comppct.r, na.rm = TRUE), 2)) %>% 
+  ## join w/mapunit data
+  left_join(., mapunit, by = "mukey")
+
+## remove mapunit variables we don't care about (right now) and
+## convert commas to _ in muname so its csv compatible 
+full_soil <- full_soil %>% 
+  mutate(muname = gsub(", ", "_", muname)) %>% 
+  dplyr::select(!c(mukind)) %>% 
+  ## convert mukey from dbl to char for spatial join step
+  mutate(mukey = as.character(mukey))
+
+
+## Map unit merge --------------------------------------------------------------
+## Now we'll merge it with the spatial data
+ssurgo_sf <- ssurgo666$spatial %>% 
+  janitor::clean_names() %>% 
+  left_join(., full_soil, by = c("mukey", "musym"))
+
+
+ssurgo_vect <- vect(ssurgo_sf)
+
+```
+
+
+
 
 
 # Quarterly rasters
