@@ -73,34 +73,104 @@ writeRaster(som_resamp, here("data/ssurgo/ssurgo_som_270m.tif"))
 
 ### SSURGO import test
 Testing out importing SSURGO data with `FedData` package. Starting out with only one map area. Involves importing data, then reducing number of horizons to 1:1 with components (right now by selecting for depth?), then taking weighted avg of components to generate 1:1 join with map unit, then should be able to spatially plot info for pH, SOM, and CEC???
+
+**NOTE** Doesn't work with raster/vector of CA because the area is too big. Also tried reading in for all soil areas but it timed out before it could merge them all as one geopackage. Will instead download/extract separately, then read in from geopackage and merge. Not as nice as calling directly from `get_ssurgo()` output (which I left commented out for future reference).
+
+The following soil survey areas were omitted for lacking horizon-level data: CA663, CA704, CA793, CA804, CA806
 ```{r}
-## fxn
-not_all_na <- function(x) any(!is.na(x)) # for data cleaning
+## DF of soil survey areas in CA -----------------------------------------------
+CA_surveyAreas = c("AZ649", "AZ656", "CA011", "CA013", "CA021", "CA031", 
+                   "CA033", "CA041", "CA053", "CA055", "CA067", "CA069", 
+                   "CA077", "CA087", "CA095", "CA097", "CA101", "CA113", 
+                   "CA600", "CA601", "CA602", "CA603", "CA604", "CA605", 
+                   "CA606", "CA607", "CA608", "CA609", "CA610", "CA612",
+                   "CA614", "CA618", "CA619", "CA620", "CA624", "CA628", 
+                   "CA630", "CA632", "CA637", "CA638", "CA641", "CA642", 
+                   "CA644", "CA645", "CA646", "CA647", "CA648", "CA649", 
+                   "CA651", "CA653", "CA654", "CA659", "CA660", "CA664", 
+                   "CA665", "CA666", "CA667", "CA668", "CA669", "CA670",
+                   "CA671", "CA672", "CA673", "CA674", "CA675", "CA676",
+                   "CA677", "CA678", "CA679", "CA680", "CA681", "CA682", 
+                   "CA683", "CA684", "CA685", "CA686", "CA687", "CA688", 
+                   "CA689", "CA691", "CA692", "CA693", "CA694", "CA695",
+                   "CA696", "CA697", "CA698", "CA699", "CA701", "CA702", 
+                   "CA703", "CA707", "CA708", "CA709", "CA713", "CA719", 
+                   "CA724", "CA729", "CA731", "CA732", "CA740", "CA750",
+                   "CA760", "CA763", "CA772", "CA776", "CA777", "CA788", 
+                   "CA789", "CA790", "CA792", "CA794", "CA795", "CA796", 
+                   "CA802", "CA803", "CA805")
 
-## Download data (Survey area CA666 in Kern Co)
-ssurgo666 <- get_ssurgo(template = "CA666", label = "CA_666") #add put raw.dir later if this works
+CA_df = data.frame(template = CA_surveyAreas,
+                   label = CA_surveyAreas,
+                   raw.dir = here("data/ssurgo/raw"),
+                   extraction.dir = here("data/ssurgo/extracted"))
 
-## create chorizon, component, 
-## and mapunit dataset for aoi
-chorizon <- ssurgo666$tabular$chorizon
-component <- ssurgo666$tabular$component
-mapunit <- ssurgo666$tabular$mapunit
 
-## Quick check on number of unique values to
-## anticipate joining situation
-### Quite a few components w/o horizon level data
-# > length(unique(component$cokey))
-# [1] 821
-# > length(unique(chorizon$cokey))
-# [1] 242
-### Component data for all map units
-# > length(unique(component$mukey))
-# [1] 183
-# > length(unique(mapunit$mukey))
-# [1] 183
+## Download and extract data locally -------------------------------------------
+pmap(CA_df, get_ssurgo)
+
+
+## Read in horizon, component, and mapunit data
+## Merge across all survey areas -----------------------------------------------
+## Horizon
+chorizon = data.frame()
+for (i in 1:nrow(CA_df)) {
+  area = paste0(here("data/ssurgo/extracted//"), 
+                CA_df$template[i], 
+                "_ssurgo.gpkg")
+  
+  x <- st_read(area, layer = "chorizon")
+  chorizon = rbind(chorizon, x)
+}
+
+## Component
+component = data.frame()
+for (i in 1:nrow(CA_df)) {
+  area = paste0(here("data/ssurgo/extracted//"), 
+                CA_df$template[i], 
+                "_ssurgo.gpkg")
+  
+  x <- st_read(area, layer = "component")
+  component = rbind(component, x)
+}
+
+## Mapunit
+mapunit = data.frame()
+for (i in 1:nrow(CA_df)) {
+  area = paste0(here("data/ssurgo/extracted//"), 
+                CA_df$template[i], 
+                "_ssurgo.gpkg")
+  
+  x <- st_read(area, layer = "mapunit")
+  mapunit = rbind(mapunit, x)
+}
+
+# ## **FOR REFERENCE**: If using fewer survey areas,
+# ## use this code to automatically read in/merge dataset.
+# ## Then filter/merge using same code below
+# ssurgo = get_ssurgo(template = CA_surveyAreas, label = "CA")
+# chorizon = ssurgo$tabular$chorizon
+# component = ssurgo$tabular$component
+# mapunit = ssurgo$tabular$mapunit
+# ssurgo_sf = ssurgo$spatial
+
+# ## Quick check on number of unique values to
+# ## anticipate joining situation
+# length(unique(component$cokey))
+# [1] 91837
+# length(unique(chorizon$cokey))
+# [1] 42218
+# ## Quite a few components w/o horizon level data
+# length(unique(component$mukey))
+# [1] 19126
+# length(unique(mapunit$mukey))
+# [1] 19126
+# ## Matching # of mapunits (expected)
 
 
 ## Remove variables with all NAs
+not_all_na <- function(x) any(!is.na(x)) #for data cleaning
+
 chorizon <- chorizon %>% 
   select_if(not_all_na)
 component <- component %>% 
@@ -108,7 +178,8 @@ component <- component %>%
 mapunit <- mapunit %>% 
   select_if(not_all_na)
 
-## Horizon level data ---------------------------------------------
+
+## Horizon level data ---------------------------------------------------------
 ## Finding total soil depth.... not sure why this is a step
 depth = chorizon %>% 
   group_by(cokey) %>% 
@@ -127,7 +198,7 @@ nrow(
     summarize(count = n()) %>% 
     filter(count > 1)
   )
-# [1] 135
+# [1] 31000
 
 ## To deal w/this, we'll summarize characteristics of interest (e.g. pH, SOM, CEC)
 ## w/weighted mean of horizon thickness (above 30cm cutoff)
@@ -152,7 +223,7 @@ component = component %>%
 ## join with horizon data
 component_horizon = left_join(component, chorizon30_wmean, by = "cokey")
 
-## weighted average of variables based on % component in mapunit
+## Find weighted average of variables based on % component in a mapunit
 full_soil = component_horizon %>% 
   group_by(mukey) %>% 
   summarize(om = round(weighted.mean(om, comppct.r, na.rm = TRUE),2),
@@ -166,19 +237,40 @@ full_soil = component_horizon %>%
 ## convert commas to _ in muname so its csv compatible 
 full_soil <- full_soil %>% 
   mutate(muname = gsub(", ", "_", muname)) %>% 
-  dplyr::select(!c(mukind)) %>% 
+  dplyr::select(!c(mukind, mapunitlfw.l:mapunitlfw.h)) %>% 
   ## convert mukey from dbl to char for spatial join step
   mutate(mukey = as.character(mukey))
 
+## Save as intermediate CSV
+write_csv(full_soil, here("data/ssurgo/horizon_CA.csv"))
 
-## Map unit merge --------------------------------------------------------------
-## Now we'll merge it with the spatial data
-ssurgo_sf <- ssurgo666$spatial %>% 
+
+## Merge spatial and map unit data ---------------------------------------------
+## first read in/merge all spatial data (will take a while!)
+ssurgo_sf = NULL
+for (i in 1:nrow(CA_df)) {
+  area = paste0(here("data/ssurgo/extracted//"), CA_df$template[i], "_ssurgo.gpkg")
+  
+  x <- st_read(area, layer = "geometry")
+  ssurgo_sf = rbind(ssurgo_sf, x)
+}
+
+## Merge with our final soil data
+ssurgo_sf <- ssurgo_sf %>% 
   janitor::clean_names() %>% 
   left_join(., full_soil, by = c("mukey", "musym"))
 
+## Create separate sf for variables to be extracted
+ssurgo_sf_filter <- ssurgo_sf %>% 
+  dplyr::select(om, ph, cec)
 
+## Save both as as .shp
+st_write(ssurgo_sf_filter, here("data/ssurgo/ssurgo_ca_select.shp"))
+
+## convert to vect first
+## some variable names changed by st_write...
 ssurgo_vect <- vect(ssurgo_sf)
+writeVector(ssurgo_vect, here("data/ssurgo/ssurgo_ca_full.shp"))
 
 ```
 
