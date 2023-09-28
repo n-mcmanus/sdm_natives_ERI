@@ -1,0 +1,320 @@
+---
+title: "Environmental data prep"
+author: Nick McManus
+output: html_document
+date: '2023-09-28'
+---
+
+```{r setup, include=FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+library(tidyverse)    ## always
+library(here)         ## reading/writing data
+library(purrr)        ## run iterative fxns faster
+library(sf)           ## vector objects
+library(terra)        ## Better/faster GIS
+library(raster)       ## GIS format required by Dismo
+library(FedData)      ## Downloading SSURGO data
+```
+
+
+This script is used for generating and prepping environmental data to be used in the SDM. 
+
+# Convert ASC to TIF
+
+Publicly available BCMv8 files are in .asc format. ASCII files have associated coordinates but usually do not have an explicitly defined CRS when read in as a raster. Additionally, .tif have smaller file sizes than .asc, so conversion saves on data storage. The `asc_to_tif()` function converts an entire directory of .asc files to .tif files with appropriate CRS. BCM data uses NAD83 CA Albers (EPSG:3310), so this is the default for the function.
+```{r}
+## Read in fxn
+source(here('R/asc_to_tif.R'))
+
+## Assign file path (selects all .asc files in directory)
+filepath = here('data/bcmv8/2000_2023//')
+
+## Run fxn
+asc_to_tif(filepath)
+```
+
+
+
+# BCM Quarterly rasters
+
+Using the `quarter_rast()` function, we'll generate rasters of either mean or cumulative values across the summer (Jun-Aug) or winter (Dec-Feb) quarter for each water year. These will then be used as additional environmental variables for extraction. 
+```{r}
+## Read in fxn
+source(here("R/quarterly_avg.R"))
+
+## Define fxn variables
+pathIn = here("data/bcmv8/2000_2022//")
+pathOut = here("data/bcmv8/quarterly_avgs//")
+startYear = 2000
+endYear = 2022
+
+## Run for winter ppt
+quarter_rast(var="ppt", quarter="winter", method="mean",
+            startYear, endYear,
+            pathIn, pathOut)
+
+quarter_rast(var="ppt", quarter="winter", method="sum",
+            startYear, endYear,
+            pathIn, pathOut)
+
+## Run for summer tmx
+quarter_rast(var="tmx", quarter="summer", method = "mean",
+            startYear, endYear,
+            pathIn, pathOut)
+
+```
+
+
+
+# SSURGO Data
+
+Info and link to site go here.
+https://websoilsurvey.nrcs.usda.gov/app/WebSoilSurvey.aspx
+
+
+Directly downloading and extracting the most recent (2019) SSURGO data with the `FedData` package. 
+
+Soil data from SSURGO is broken down into four different levels: soil survey areas, map units, components, and horizons. Data is downloaded by soil survey area, which is subdivided into map units. Spatial data (polygons) are provided only for map units. Each map unit contains one or more components, which helps break down map units by further soil type. Map unit and component data are related using a map unit key (mukey). Soil components are vertically broken up into horizons, representing a different strata. Horizon-level data contains the information we're interested for modeling species distribution, such as pH, percent organic matter, and cation exchange capacity. Horizon and component data are related using a component key (cokey). 
+
+Because some components have many horizons, and some map units have several components, relating horizon-level data to map units for spatial extraction requires turning 1:many joins into 1:1 joins. This is done by selecting a cut-off soil depth, then finding a weighted average of horizon-level data based on the thickness of each horizon. Once this horizon data is joined to a component, we can use the percent area of a component w/in a map unit to find the weighted average again. 
+
+**NOTE** `get_ssurgo()` supposedly can use spatial templates to download/crop/merge data for a given area, but this doesn't work with rasters or vectors of CA because the area is too big. I also tried reading in all soil areas at once, but it timed out before it could merge them all as one geopackage. The work-around is to download/extract each survey area in CA separately, then read in data from respective geopackages and merge. Not as nice as calling directly from a `get_ssurgo()` output (which I left commented out for future reference).
+
+The following soil survey areas were omitted for lacking horizon-level data: CA663, CA704, CA793, CA804, CA806. 
+
+### Download/merge data
+First we'll download and extract all the soil data for CA locally as geopackages. Then we'll read in horizon, component, and map unit data for each soil area and merge them. 
+```{r}
+## List of soil survey areas in CA (w/horizon data)
+CA_surveyAreas = c("AZ649", "AZ656", "CA011", "CA013", "CA021", "CA031", 
+                   "CA033", "CA041", "CA053", "CA055", "CA067", "CA069", 
+                   "CA077", "CA087", "CA095", "CA097", "CA101", "CA113", 
+                   "CA600", "CA601", "CA602", "CA603", "CA604", "CA605", 
+                   "CA606", "CA607", "CA608", "CA609", "CA610", "CA612",
+                   "CA614", "CA618", "CA619", "CA620", "CA624", "CA628", 
+                   "CA630", "CA632", "CA637", "CA638", "CA641", "CA642", 
+                   "CA644", "CA645", "CA646", "CA647", "CA648", "CA649", 
+                   "CA651", "CA653", "CA654", "CA659", "CA660", "CA664", 
+                   "CA665", "CA666", "CA667", "CA668", "CA669", "CA670",
+                   "CA671", "CA672", "CA673", "CA674", "CA675", "CA676",
+                   "CA677", "CA678", "CA679", "CA680", "CA681", "CA682", 
+                   "CA683", "CA684", "CA685", "CA686", "CA687", "CA688", 
+                   "CA689", "CA691", "CA692", "CA693", "CA694", "CA695",
+                   "CA696", "CA697", "CA698", "CA699", "CA701", "CA702", 
+                   "CA703", "CA707", "CA708", "CA709", "CA713", "CA719", 
+                   "CA724", "CA729", "CA731", "CA732", "CA740", "CA750",
+                   "CA760", "CA763", "CA772", "CA776", "CA777", "CA788", 
+                   "CA789", "CA790", "CA792", "CA794", "CA795", "CA796", 
+                   "CA802", "CA803", "CA805")
+
+## df w/get_ssurgo args for pmap
+CA_df = data.frame(template = CA_surveyAreas,
+                   label = CA_surveyAreas,
+                   raw.dir = here("data/ssurgo/raw"),
+                   extraction.dir = here("data/ssurgo/extracted"))
+
+## Download/extract each survey area
+pmap(CA_df, get_ssurgo)
+
+
+## Read in/merge horizon data
+chorizon = data.frame()
+for (i in 1:nrow(CA_df)) {
+  area = paste0(here("data/ssurgo/extracted//"), 
+                CA_df$template[i], 
+                "_ssurgo.gpkg")
+  
+  x <- st_read(area, layer = "chorizon")
+  chorizon = rbind(chorizon, x)
+}
+
+## Component data
+component = data.frame()
+for (i in 1:nrow(CA_df)) {
+  area = paste0(here("data/ssurgo/extracted//"), 
+                CA_df$template[i], 
+                "_ssurgo.gpkg")
+  
+  x <- st_read(area, layer = "component")
+  component = rbind(component, x)
+}
+
+## Mapunit data
+mapunit = data.frame()
+for (i in 1:nrow(CA_df)) {
+  area = paste0(here("data/ssurgo/extracted//"), 
+                CA_df$template[i], 
+                "_ssurgo.gpkg")
+  
+  x <- st_read(area, layer = "mapunit")
+  mapunit = rbind(mapunit, x)
+}
+
+```
+
+```{r}
+# ## **FOR REFERENCE**: If using fewer survey areas,
+# ## use this code to automatically read in/merge dataset.
+# ## Then filter/merge using same code below
+# ssurgo = get_ssurgo(template = CA_surveyAreas, label = "CA")
+# chorizon = ssurgo$tabular$chorizon
+# component = ssurgo$tabular$component
+# mapunit = ssurgo$tabular$mapunit
+# ssurgo_sf = ssurgo$spatial
+```
+
+
+### Filter and join
+Perform series of averages and joins to assign horizon data to each map unit.
+```{r}
+# ## Quick check on number of unique values to
+# ## anticipate joining situation
+# length(unique(component$cokey))
+# [1] 91837
+# length(unique(chorizon$cokey))
+# [1] 42218
+# ## Quite a few components w/o horizon level data
+# length(unique(component$mukey))
+# [1] 19126
+# length(unique(mapunit$mukey))
+# [1] 19126
+# ## Matching # of mapunits (expected)
+
+
+## Remove variables with all NAs
+not_all_na <- function(x) any(!is.na(x)) #for data cleaning
+
+chorizon <- chorizon %>% 
+  select_if(not_all_na)
+component <- component %>% 
+  select_if(not_all_na)
+mapunit <- mapunit %>% 
+  select_if(not_all_na)
+
+
+## Finding total soil depth.... not sure why this is a step
+depth = chorizon %>% 
+  group_by(cokey) %>% 
+  summarize(total_depth = max(hzdepb.r))
+
+## Remove horizons that start below 30cm
+chorizon30 = chorizon %>% 
+  filter(hzdept.r < 30) %>% 
+  droplevels()
+
+## How many components still have more than 1 horizon
+## after filtering in last step?
+nrow(
+  chorizon30 %>% 
+    group_by(cokey) %>% 
+    summarize(count = n()) %>% 
+    filter(count > 1)
+  )
+# [1] 31000
+
+## To deal w/this, we'll summarize var of interest
+## w/weighted mean of horizon thickness (above 30cm cutoff)
+chorizon30_wmean = chorizon30 %>% 
+  ## find thickness of each horizon
+  mutate(thick = ifelse(hzdepb.r > 30, 30 - hzdept.r,
+                        hzdepb.r - hzdept.r)) %>% 
+  ## weighted mean of each variable by component
+  group_by(cokey) %>% 
+  summarize(om = round(weighted.mean(om.r, thick, na.rm = TRUE), 2),
+            cec = round(weighted.mean(cec7.r, thick, na.rm = TRUE), 2),
+            ph = round(weighted.mean(ph1to1h2o.r, thick),2)) %>% 
+  ## join w/depth
+  left_join(., depth, by = "cokey")
+
+
+## Filter component data for variables of interest
+component = component %>% 
+  dplyr::select(c(comppct.r, compname, slope.r, mukey, cokey))
+
+## join with horizon data
+component_horizon = left_join(component, chorizon30_wmean, by = "cokey")
+
+## Find weighted average of variables based on % component in a mapunit
+full_soil = component_horizon %>% 
+  group_by(mukey) %>% 
+  summarize(om = round(weighted.mean(om, comppct.r, na.rm = TRUE),2),
+            cec = round(weighted.mean(cec, comppct.r, na.rm = TRUE), 2),
+            ph = round(weighted.mean(ph, comppct.r, na.rm = TRUE),2),
+            slope = round(weighted.mean(slope.r, comppct.r, na.rm = TRUE), 2)) %>% 
+  ## join w/mapunit data
+  left_join(., mapunit, by = "mukey")
+
+## remove mapunit variables we don't care about and
+## convert commas to _ in muname so its csv compatible 
+full_soil <- full_soil %>% 
+  mutate(muname = gsub(", ", "_", muname)) %>% 
+  dplyr::select(!c(mukind, mapunitlfw.l:mapunitlfw.h)) %>% 
+  ## convert mukey from dbl to char for spatial join step
+  mutate(mukey = as.character(mukey))
+
+## Save as intermediate CSV
+write_csv(full_soil, here("data/ssurgo/horizon_CA.csv"))
+```
+
+
+### Spatialize and export
+```{r}
+## Merge spatial and map unit data 
+## first read in/merge all spatial data (will take a while!)
+ssurgo_sf = NULL
+for (i in 1:nrow(CA_df)) {
+  area = paste0(here("data/ssurgo/extracted//"),
+                CA_df$template[i], 
+                "_ssurgo.gpkg")
+  
+  x <- st_read(area, layer = "geometry")
+  ssurgo_sf = rbind(ssurgo_sf, x)
+}
+
+## Merge with our final soil data
+ssurgo_sf <- ssurgo_sf %>% 
+  janitor::clean_names() %>% 
+  left_join(., full_soil, by = c("mukey", "musym"))
+
+## Create separate sf for variables to be extracted
+ssurgo_sf_filter <- ssurgo_sf %>% 
+  dplyr::select(om, ph, cec)
+
+## Save as .shp
+st_write(ssurgo_sf_filter, here("data/ssurgo/ssurgo_ca_select.shp"))
+
+## convert to vect first
+## some variable names changed by st_write...
+ssurgo_vect <- vect(ssurgo_sf)
+writeVector(ssurgo_vect, here("data/ssurgo/ssurgo_ca_full.shp"))
+```
+
+
+### Old code
+Also found some rasters on Data Basin for pH (https://databasin.org/datasets/92c216fc8a0e41b9859b500de930ae7e/) and SOM (https://databasin.org/datasets/8cb1acdc738d4c9196435195b13bf972/).
+
+Used this code to have rasters match the resolution and spatial extent of the the BCM layers, then export. 
+As of now, not using because it's older (2008) and missing CEC. 
+```{r}
+## reference raster
+bcm = rast(here("data/bcmv8/2000_2022/ppt2020jan.tif"))
+
+## ssurgo rasters
+ph = rast(here("data/ssurgo/ssurgo_ph.tif"))
+som = rast(here("data/ssurgo/ssurgo_percent_som.tif"))
+
+## change resolution from 90m to 270m (factor of 3) 
+ph_270 <- aggregate(ph, fact=3, fun="mean", na.rm=TRUE) %>% 
+  project(y = bcm)
+## resample to ensure same extent
+ph_resamp <- resample(ph_270, bcm, method="bilinear")
+## export
+writeRaster(ph_resamp, here("data/ssurgo/ssurgo_ph_270m.tif"))
+
+## same with SOM
+som_270 <- aggregate(som, fact=3, fun="mean", na.rm=TRUE) %>% 
+  project(y=bcm)
+som_resamp <- resample(som_270, bcm, method="bilinear")
+writeRaster(som_resamp, here("data/ssurgo/ssurgo_som_270m.tif"))
+```
+
