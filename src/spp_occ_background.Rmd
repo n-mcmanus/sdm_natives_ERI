@@ -43,17 +43,17 @@ names <- c(
   "c_lasiophyllus"
 )
 
-## List of accepted sources
-sources <- paste(c("BLM",
-                   "Bureau",
-                   "USDA",
-                   "DFW",
-                   "USGS",
-                   "Nature Conservancy",
-                   "TNC",
-                   "CNPS",
-                   "Taylor",
-                   "Hrusa"), collapse = "|")
+# ## List of accepted sources
+# sources <- paste(c("BLM",
+#                    "Bureau",
+#                    "USDA",
+#                    "DFW",
+#                    "USGS",
+#                    "Nature Conservancy",
+#                    "TNC",
+#                    "CNPS",
+#                    "Taylor",
+#                    "Hrusa"), collapse = "|")
 
 ## Loop through each spp to read in, filter, and export
 for (i in 1:length(names)) {
@@ -64,7 +64,7 @@ for (i in 1:length(names)) {
   df_filter <- df %>% 
     ## "LOW" filter criteria
     filter(`Location Quality` %in% c("high", "medium"),
-           `Accuracy: Square Meters` <= 270,
+           `Accuracy: Square Meters` <= 72900,
            Date >= "1999-10-01") 
     ## "HIGH" filter criteria
     # filter(str_detect(.$Source, sources))
@@ -306,30 +306,50 @@ for (i in 1:length(names)) {
 Finally, random background occurrence points will be generated across all of California using the `dismo` package and exported as a CSV file. 
 
 **NOTE:** Updated from 40 to 150 pts per mo/yr (11,040 to 41,400 total). Rather than use points from all of CA to create SDM model, we'll only be using points within a buffered distance from occurrence points for a species. The total number was increased to ensure that there are enough within the sample of background points taken to train the model. This methodoly may change later.
+
+**NOTE (2):** Updated to again back to 37 pts per mo/yr (10,212 total), but only within are of species presences. 
+- Testing no buffer, 5km, and 20km
+- Realistically this buffer would be determined by distribution of plant seeds
 ```{r}
-## Reference raster; make RasterLayer obj
-rast <- rast(here('data/bcmv8/2000_2022/aet2020dec.tif')) %>% 
-  project(y = "WGS84")
-r <- raster(rast)
+## read in spp occurrence points
+sppOcc = read_csv(here("data/occ/combined_spp_occ/a_polycarpa_lowFilter.csv"))
 
-## Create random background points
-## Random samples w/o replacement
-backOcc <- randomPoints(mask = r, 
-                        n = 27600,  
-                        prob = FALSE)
-backOcc <- as.data.frame(backOcc)
+## Fxn to generate background points
+back_pts <- function(sppOcc, buffer) {
+    ## Vectorize sppOcc, find convex hull of pts, 
+    ## then add buffer
+    sppZone <- convHull(vect(sppOcc, 
+                           geom = c("lon", "lat"),
+                           crs = "WGS84")) %>% 
+    buffer(., width = buffer)
+    
+    ## Reference raster; make RasterLayer obj
+    rast <- rast(here('data/bcmv8/2000_2022/aet2020dec.tif')) %>% 
+      project(y = "WGS84") %>% 
+      crop(x=., y=sppZone, mask = TRUE)
+    r <- raster(rast)
+    
+    ## Create random background points
+    ## Random samples w/o replacement
+    backOcc <- randomPoints(mask = r, 
+                            n = 10212,  
+                            prob = FALSE)
+    backOcc <- as.data.frame(backOcc)
+    
+    ## Assign 37 pts to each mo/yr
+    ## First create df of mo/yr in wy format, then bind to pts df
+    dates <- data.frame(month = rep(1:12, each = 37),
+                        year = rep(2000:2022, each = 444))
+    dates <- rbind(tail(dates, 111), head(dates, -111))
+    dates[1:111, 2] = (dates[112,2] - 1)
+    
+    backSamp <- cbind(backOcc, dates)
+}
 
-## Assign 150 pts to each mo/yr
-## First create df of mo/yr in wy format, then bind to pts df
-dates <- data.frame(month = rep(1:12, each = 100),
-                    year = rep(2000:2022, each = 1200))
-dates <- rbind(tail(dates, 300), head(dates, -300))
-dates[1:300, 2] = (dates[301,2] - 1)
-
-backSamp <- cbind(backOcc, dates)
+backOcc <- back_pts(sppOcc, buffer = 20000)
 
 ### export
-write_csv(backSamp, here('data/occ/background_points.csv'))
+write_csv(backOcc, here('data/background/a_polycarpa_20km.csv'))
 ```
 
 
