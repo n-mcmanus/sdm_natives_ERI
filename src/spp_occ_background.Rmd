@@ -305,7 +305,7 @@ for (i in 1:length(names)) {
 # Generate background points
 Finally, random background occurrence points will be generated across all of California using the `dismo` package and exported as a CSV file. 
 
-**NOTE:** Updated from 40 to 150 pts per mo/yr (11,040 to 41,400 total). Rather than use points from all of CA to create SDM model, we'll only be using points within a buffered distance from occurrence points for a species. The total number was increased to ensure that there are enough within the sample of background points taken to train the model. This methodoly may change later.
+**NOTE:** Updated from 40 to 150 pts per mo/yr (11,040 to 41,400 total). Rather than use points from all of CA to create SDM model, we'll only be using points within a buffered distance from occurrence points for a species. The total number was increased to ensure that there are enough within the sample of background points taken to train the model. This methodology may change later.
 
 **NOTE (2):** Updated to again back to 37 pts per mo/yr (10,212 total), but only within are of species presences. 
 - Testing no buffer, 5km, and 20km
@@ -346,10 +346,10 @@ back_pts <- function(sppOcc, buffer) {
     backSamp <- cbind(backOcc, dates)
 }
 
-backOcc <- back_pts(sppOcc, buffer = 20000)
+backOcc <- back_pts(sppOcc, buffer = 5000)
 
 ### export
-write_csv(backOcc, here('data/background/a_polycarpa_20km.csv'))
+write_csv(backOcc, here('data/background/back_a_polycarpa_lowfilter_5km.csv'))
 ```
 
 

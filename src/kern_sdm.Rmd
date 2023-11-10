@@ -42,7 +42,7 @@ source(here('R/env_extract.R'))
 ## Define fxn variables
 pathMonth = here("data/bcmv8/2000_2022//")
 pathQuarter = here("data/bcmv8/quarterly_avgs//")
-pathSoil = here("data/ssurgo//")
+soilRast = rast(here("data/natsgo/MapunitRaster_10m_CA_2023.tif"))
 ```
 
 
@@ -59,18 +59,41 @@ names <- c(
 )
 
 ## Read in species occurrence df
+##NOTE: starting with A.polycarpa as ref spp
 sppOcc <- read_csv(paste0(here('data/occ/combined_spp_occ//'),
                           names[1],
                           "_lowFilter.csv"))
 
 ## Use fxn to extract env data at location of occurrences
-occExtract_2000_2022 <- env_extract(startYear=2000, endYear=2022, 
-                                    pathMonth, pathQuarter, pathSoil, sppOcc) %>% 
-  rename(ph = ssurgo_ph,
-         per_som = ssurgo_percent_som)
 
-## Export
-write_csv(occExtract_2000_2022, here('data/swd/occExtract_2000_2022.csv'))
+### TESTING FOR SOIL DEPTHS
+horizon30 = read_csv(here("data/natsgo/horizon30_CA.csv"))
+occExtract_30 <- env_extract(startYear=2000, endYear=2022, 
+                             pathMonth, pathQuarter, soilRast, 
+                             horizon=horizon30, occ = sppOcc) %>% 
+  dplyr::select(!c(mukey, musym:muname))
+write_csv(occExtract_30, here('data/swd/a_polycarpa/a_polycarpa_30cm_lowFilter.csv'))
+
+horizon100 = read_csv(here("data/natsgo/horizon100_CA.csv"))
+occExtract_100 <- env_extract(startYear=2000, endYear=2022, 
+                             pathMonth, pathQuarter, soilRast, 
+                             horizon=horizon100, occ = sppOcc) %>% 
+  dplyr::select(!c(mukey, musym:muname))
+write_csv(occExtract_100, here('data/swd/a_polycarpa/a_polycarpa_100cm_lowFilter.csv'))
+
+horizon200 = read_csv(here("data/natsgo/horizon200_CA.csv"))
+occExtract_200 <- env_extract(startYear=2000, endYear=2022, 
+                             pathMonth, pathQuarter, soilRast, 
+                             horizon=horizon200, occ = sppOcc) %>% 
+  dplyr::select(!c(mukey, musym:muname))
+write_csv(occExtract_200, here('data/swd/a_polycarpa/a_polycarpa_200cm_lowFilter.csv'))
+
+horizon.full = read_csv(here("data/natsgo/horizonFull_CA.csv"))
+occExtract_full <- env_extract(startYear=2000, endYear=2022, 
+                             pathMonth, pathQuarter, soilRast, 
+                             horizon=horizon.full, occ = sppOcc) %>% 
+  dplyr::select(!c(mukey, musym:muname))
+write_csv(occExtract_full, here('data/swd/a_polycarpa/a_polycarpa_full_lowFilter.csv'))
 ```
 
 
@@ -78,40 +101,42 @@ write_csv(occExtract_2000_2022, here('data/swd/occExtract_2000_2022.csv'))
 First, we'll create a subset of the background points data that are located within 50km of the species occurrence points using the terra and sf packages. Then, we'll run the `env_extract()` fxn on this subset and export the results for use in a species-specific SDM.
 ```{r}
 ## Read in background df
-backOcc <- read_csv(here('data/occ/background_points.csv')) %>% 
+backOcc <- read_csv(here('data/background/back_a_polycarpa_lowfilter_5km.csv')) %>% 
   janitor::clean_names()
-
-## Vectorize sppOcc, find convex hull of pts, 
-## then add buffer of 50km
-sppZone <- convHull(vect(sppOcc, 
-                         geom = c("lon", "lat"),
-                         crs = "WGS84")) %>% 
-  buffer(., width = 50000)
-
-## Vectorize backOcc, crop it w/sppZone,
-## then convert to sf obj
-backOcc_crop_sf = st_as_sf(crop(vect(backOcc, 
-                                     geom = c("x", "y"),
-                                     crs = "WGS84"),
-                                sppZone))
-
-## Finally, turn cropped background pts
-## back into df to use in env_extract() fxn.
-## Need lon/lat as separate vars for fxn
-backOcc_crop_df = cbind((data.frame(backOcc_crop_sf)),
-                        (data.frame(st_coordinates(backOcc_crop_sf)))) %>%
-  dplyr::select(!geometry)
 
 
 ## Use fxn to extract for background points
 ## NOTE: this will take a while to run
-backExtract_2000_2022 <- env_extract(startYear=2000, endYear=2022,
-                                     pathMonth, pathQuarter,
-                                     backOcc_crop_df,
-                                     lon = 'X', lat = 'Y')
+backExtract_30 <- env_extract(startYear=2000, endYear=2022,
+                              pathMonth, pathQuarter, soilRast,
+                              horizon=horizon30, occ = backOcc,
+                              lon = "x", lat = "y") %>% 
+  dplyr::select(!c(mukey, musym:muname))
+
+backExtract_100 <- env_extract(startYear=2000, endYear=2022,
+                               pathMonth, pathQuarter, soilRast,
+                               horizon=horizon100, occ = backOcc,
+                               lon = "x", lat = "y") %>% 
+  dplyr::select(!c(mukey, musym:muname))
+
+backExtract_200 <- env_extract(startYear=2000, endYear=2022,
+                               pathMonth, pathQuarter, soilRast,
+                               horizon=horizon200, occ = backOcc,
+                               lon = "x", lat = "y") %>% 
+  dplyr::select(!c(mukey, musym:muname))
+
+backExtract_full <- env_extract(startYear=2000, endYear=2022,
+                               pathMonth, pathQuarter, soilRast,
+                               horizon=horizon.full, occ = backOcc,
+                               lon = "x", lat = "y") %>% 
+  dplyr::select(!c(mukey, musym:muname))
+
 
 ## Export
-write_csv(backExtract_2000_2022, here('data/swd/backExtract_2000_2022.csv'))
+write_csv(backExtract_30, here('data/swd/a_polycarpa/backExtract_a_polycarpa_30cm_lowFilter.csv'))
+write_csv(backExtract_100, here('data/swd/a_polycarpa/backExtract_a_polycarpa_100cm_lowFilter.csv'))
+write_csv(backExtract_200, here('data/swd/a_polycarpa/backExtract_a_polycarpa_200cm_lowFilter.csv'))
+write_csv(backExtract_full, here('data/swd/a_polycarpa/backExtract_a_polycarpa_full_lowFilter.csv'))
 ```
 
 
@@ -132,8 +157,8 @@ Assessing the correlation between environmental variables for SDM. Additional de
 # corrplot(occCor, method = 'number', type = 'upper')
 
 
-testBack <- read_csv(here('data/swd/backExtract_2000_2022.csv')) %>% 
-  dplyr::select(aet:tmx_summer) %>% 
+testBack <- read_csv(here('data/swd/a_polycarpa/backExtract_a_polycarpa_2000_2022_lowFilter5km.csv')) %>% 
+  dplyr::select(aet:cec) %>% 
   mutate(tmean = (tmx+tmn)/2,
          tdiff = tmx-tmn) %>%
   dplyr::select(!c(cwd, pet, tmn, tmn))
@@ -170,25 +195,23 @@ Construct model using Samples with Data (SWD) method.
 Read in species occurrence and background data, then wrangle to put in proper format. The model will be run using two temperature predictors: mean temperature [(tmn + tmx)/2] and difference of temperature [tmx-tmn]. After these values are derived, both occurrence and background points will isolated by month and merged into one data frame per month .
 ```{r}
 ## Occurrence data ----------------------------------------------------------
-swdOcc <- read_csv(here('data/swd/occExtract_2000_2022.csv')) %>% 
+swdOcc <- read_csv(here('data/swd/a_polycarpa/a_polycarpa_200cm_lowFilter.csv')) %>% 
   ## Add tmean, tdiff, and presence values
   mutate(tdiff = round(tmx-tmn, 2),
          presence = 1) %>% 
   ## remove select variables
-  dplyr::select(!c(gbifid, tmn, pet, cwd)) %>%  
-  ## rename lon/lat cols
-  rename(x = decimallongitude,
-         y = decimallatitude)
+  dplyr::select(!c(id, source, tmn, pet, cwd, ppt, date, ppt_winter_mean)) %>% 
+  rename(x = lon, y = lat)
 
 ## rearrange x and y to match background df
-swdOcc <- swdOcc[, c(2, 1, 3:11)]
+swdOcc <- swdOcc[, c(2, 1, 4, 3, 5:13)]
 
 
 ## Background Data ----------------------------------------------------------
-swdBack <- read_csv(here('data/swd/backExtract_2000_2022.csv')) %>% 
+swdBack <- read_csv(here('data/swd/a_polycarpa/backExtract_a_polycarpa_200cm_lowFilter.csv')) %>% 
   mutate(tdiff = round(tmx-tmn, 2),
          presence = 0) %>% 
-  dplyr::select(!c(tmn, pet, cwd))
+  dplyr::select(!c(tmn, pet, ppt, cwd, ppt_winter_mean))
 
 
 ## Bind into one df and
@@ -196,7 +219,7 @@ swdBack <- read_csv(here('data/swd/backExtract_2000_2022.csv')) %>%
 swd <- rbind(swdOcc, swdBack)
 swd <- swd[complete.cases(swd), ]
 
-write_csv(swd, here('data/swd/swd_2000_2022.csv'))
+write_csv(swd, here('data/swd/a_polycarpa/swd_a_polycarpa_200cm_lowFilter.csv'))
 ```
 
 ### Model fitting
@@ -235,7 +258,7 @@ testModel <- maxent(x, p, path=path, args=args, removeDuplicates = TRUE)
 ### Final model
 ```{r}
 ## Read in all points
-swd <- read_csv(here('data/swd/swd_2000_2022.csv'))
+swd <- read_csv(here('data/swd/a_polycarpa/swd_a_polycarpa_full_lowFilter.csv'))
 
 ## Select env predictors for model (presence + background)
 x <- swd %>% 
@@ -251,19 +274,20 @@ args <- c('jackknife=TRUE',
           'responsecurves=TRUE', 
           'linear=TRUE',
           'quadratic=TRUE',
+          'product=TRUE',
           'threshold=FALSE',
           'hinge=FALSE', 
           'maximumiterations=100000', 
           'writeplotdata=TRUE')
 
 ## Path to save results
-path <- here('data/maxent_outputs/final/')
+path <- here('data/maxent_outputs/a_polycarpa/lowFilter/full_depth')
 
 #Final Model Creation
 testFinal <- maxent(x, p, path=path, args=args)
 
 
-save(testFinal, file = here("data/maxent_outputs/final/Model.rData"))
+# save(testFinal, file = here("data/maxent_outputs/final/Model.rData"))
 ```
 
 

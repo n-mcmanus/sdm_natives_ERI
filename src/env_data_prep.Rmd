@@ -65,8 +65,252 @@ quarter_rast(var="tmx", quarter="summer", method = "mean",
 ```
 
 
+# gNATSGO Data
+Due to the large number of species occurrences within NA pockets of CA gSSURGO data, we'll be using the gridded National Soil Survey Geographic Database (gNATSGO) for extracting soil data. NATSGO data combines SSURGO and STATSGO, prioritizing SSURGO data where available and filling in missing areas with lower-level STATSGO data. gNATSGO also differs from gSSURGO in that mapunit level data is spatialized as a 10m resolution raster rather than a vector. Due to the resolution of other environmental data and the coordinate precision with which species occurrence data is filtered, this raster should be satisfactory for extracting soil characteristics. 
 
-# SSURGO Data
+gNATSGO data by state can be directly downloaded as an ESRI geodatabase (.gdb) from the USDA's Natural Resources Conservation Service (NRCS):
+https://nrcs.app.box.com/v/soils/folder/191785692827
+
+More information about the database can be found on the NRCS' website:
+https://www.nrcs.usda.gov/resources/data-and-reports/gridded-national-soil-survey-geographic-database-gnatsgo#download
+
+
+**NOTE:** While tabular data from .gdb can be read into R, I have not yet found a method for directly reading in the mapunit raster. Currently, this raster is obtained by opening the .gdb in ArcGIS Pro and exporting the raster as a .tif file.
+
+The code and workflow for preparing gSSURGO data is still included in the following section for future reference. The workflow largely remains the same for both data sources.
+
+
+Reading in data from gNATSGO database saved locally
+```{r}
+## Read in using sf package to specify file in database
+## Comes in as df
+chorizon = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"), layer = "chorizon")
+component = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"), layer = "component")
+mapunit = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"), layer = "mapunit")
+```
+
+
+Perform series of averages and joins to assign horizon data to each map unit.
+```{r}
+# ## Quick check on number of unique values to
+# ## anticipate joining situation
+# length(unique(component$cokey))
+# [1] 93614
+# length(unique(chorizon$cokey))
+# [1] 43989
+# ## Quite a few components w/o horizon level data
+# length(unique(component$mukey))
+# [1] 19258
+# length(unique(mapunit$mukey))
+# [1] 19258
+# ## Matching number of mapunits (expected)
+
+
+## Remove variables with all NAs
+not_all_na <- function(x) any(!is.na(x)) #for data cleaning
+
+chorizon <- chorizon %>% 
+  select_if(not_all_na)
+component <- component %>% 
+  select_if(not_all_na)
+mapunit <- mapunit %>% 
+  select_if(not_all_na)
+
+## HORIZON DATA ------------------------------------------------
+
+## Finding total soil depth
+depth = chorizon %>% 
+  group_by(cokey) %>% 
+  summarize(total_depth = max(hzdepb_r))
+  ## Most components less than 2m in depth
+
+### TESTING: How does soil depth affect model for A.polycarpa??
+### Running for 30cm, 1m, and 2m depths
+## Remove horizons that start below 30cm
+chorizon30 = chorizon %>%
+  filter(hzdept_r < 30) %>%
+  droplevels()
+chorizon100 = chorizon %>%
+  filter(hzdept_r < 100) %>%
+  droplevels()
+chorizon200 = chorizon %>%
+  filter(hzdept_r < 200) %>%
+  droplevels()
+
+## How many components still have more than 1 horizon
+## after filtering in last step?
+nrow(
+  chorizon30 %>% 
+    group_by(cokey) %>% 
+    summarize(count = n()) %>% 
+    filter(count > 1)
+  )
+# [1] 32253
+
+## To deal w/this, we'll summarize var of interest
+## w/weighted mean of horizon thickness (above cutoff)
+  ## 30cm cutoff
+  chorizon30_wmean = chorizon30 %>% 
+    ## find thickness of each horizon
+    mutate(thick = ifelse(hzdepb_r > 30, 30 - hzdept_r,
+                          hzdepb_r - hzdept_r)) %>% 
+    ## weighted mean of each variable by component
+    group_by(cokey) %>% 
+    summarize(om = round(weighted.mean(om_r, thick, na.rm = TRUE), 2),
+              cec = round(weighted.mean(cec7_r, thick, na.rm = TRUE), 2),
+              ph = round(weighted.mean(ph1to1h2o_r, thick, na.rm = TRUE),2)) %>% 
+    ## join w/depth
+    left_join(., depth, by = "cokey")
+  ## 100cm cutoff
+  chorizon100_wmean = chorizon100 %>% 
+    mutate(thick = ifelse(hzdepb_r > 100, 100 - hzdept_r,
+                          hzdepb_r - hzdept_r)) %>% 
+    group_by(cokey) %>% 
+    summarize(om = round(weighted.mean(om_r, thick, na.rm = TRUE), 2),
+              cec = round(weighted.mean(cec7_r, thick, na.rm = TRUE), 2),
+              ph = round(weighted.mean(ph1to1h2o_r, thick, na.rm = TRUE),2)) %>% 
+    left_join(., depth, by = "cokey")
+  ## 200cm cutoff
+  chorizon200_wmean = chorizon200 %>% 
+    ## find thickness of each horizon
+    mutate(thick = ifelse(hzdepb_r > 200, 200 - hzdept_r,
+                          hzdepb_r - hzdept_r)) %>% 
+    ## weighted mean of each variable by component
+    group_by(cokey) %>% 
+    summarize(om = round(weighted.mean(om_r, thick, na.rm = TRUE), 2),
+              cec = round(weighted.mean(cec7_r, thick, na.rm = TRUE), 2),
+              ph = round(weighted.mean(ph1to1h2o_r, thick, na.rm = TRUE),2)) %>% 
+    ## join w/depth
+    left_join(., depth, by = "cokey")
+  ## No cutoff
+  chorizon.full_wmean = chorizon %>% 
+    mutate(thick = hzdepb_r - hzdept_r) %>% 
+    group_by(cokey) %>% 
+    summarize(om = round(weighted.mean(om_r, thick, na.rm = TRUE), 2),
+              cec = round(weighted.mean(cec7_r, thick, na.rm = TRUE), 2),
+              ph = round(weighted.mean(ph1to1h2o_r, thick, na.rm = TRUE),2)) %>% 
+    ## join w/depth
+    left_join(., depth, by = "cokey")
+  
+## COMPONENT DATA ------------------------------------------------
+## Filter component data for variables of interest
+component = component %>% 
+  dplyr::select(c(comppct_r, compname, mukey, cokey))
+
+## join with horizon data
+component30_horizon = left_join(component, chorizon30_wmean, by = "cokey")
+component100_horizon = left_join(component, chorizon100_wmean, by = "cokey")
+component200_horizon = left_join(component, chorizon200_wmean, by = "cokey")
+component.full_horizon = left_join(component, chorizon.full_wmean, by = "cokey")
+
+
+## MAPUNIT DATA ------------------------------------------------
+## Find weighted average of variables based on % component in a mapunit
+  ## 30cm
+  full_soil30 = component30_horizon %>%
+    group_by(mukey) %>%
+    summarize(om = round(weighted.mean(om, comppct_r, na.rm = TRUE),2),
+              cec = round(weighted.mean(cec, comppct_r, na.rm = TRUE), 2),
+              ph = round(weighted.mean(ph, comppct_r, na.rm = TRUE),2)) %>%
+    ## join w/mapunit data
+    left_join(., mapunit, by = "mukey") %>%
+    ## convert commas to _ in muname so its csv compatible
+    mutate(muname = gsub(", ", "_", muname)) %>%
+    ## remove mapunit variables we don't care about
+    dplyr::select(!c(mukind:lkey))
+  
+  ## 100cm
+  full_soil100 = component100_horizon %>%
+    group_by(mukey) %>%
+    summarize(om = round(weighted.mean(om, comppct_r, na.rm = TRUE),2),
+              cec = round(weighted.mean(cec, comppct_r, na.rm = TRUE), 2),
+              ph = round(weighted.mean(ph, comppct_r, na.rm = TRUE),2)) %>%
+    ## join w/mapunit data
+    left_join(., mapunit, by = "mukey") %>%
+    ## convert commas to _ in muname so its csv compatible
+    mutate(muname = gsub(", ", "_", muname)) %>%
+    ## remove mapunit variables we don't care about
+    dplyr::select(!c(mukind:lkey)) %>%
+    ## convert mukey from dbl to char for spatial join step
+    mutate(mukey = as.character(mukey))
+
+  ## 200cm
+  full_soil200 = component200_horizon %>%
+    group_by(mukey) %>%
+    summarize(om = round(weighted.mean(om, comppct_r, na.rm = TRUE),2),
+              cec = round(weighted.mean(cec, comppct_r, na.rm = TRUE), 2),
+              ph = round(weighted.mean(ph, comppct_r, na.rm = TRUE),2)) %>%
+    ## join w/mapunit data
+    left_join(., mapunit, by = "mukey") %>%
+    ## convert commas to _ in muname so its csv compatible
+    mutate(muname = gsub(", ", "_", muname)) %>%
+    ## remove mapunit variables we don't care about
+    dplyr::select(!c(mukind:lkey)) %>%
+    ## convert mukey from dbl to char for spatial join step
+    mutate(mukey = as.character(mukey))
+
+    ## Full depth
+    full_soil.full = component.full_horizon %>%
+      group_by(mukey) %>%
+      summarize(om = round(weighted.mean(om, comppct_r, na.rm = TRUE),2),
+                cec = round(weighted.mean(cec, comppct_r, na.rm = TRUE), 2),
+                ph = round(weighted.mean(ph, comppct_r, na.rm = TRUE),2)) %>%
+      ## join w/mapunit data
+      left_join(., mapunit, by = "mukey") %>%
+      ## convert commas to _ in muname so its csv compatible
+      mutate(muname = gsub(", ", "_", muname)) %>%
+      ## remove mapunit variables we don't care about
+      dplyr::select(!c(mukind:lkey)) %>%
+      ## convert mukey from dbl to char for spatial join step
+      mutate(mukey = as.character(mukey))
+
+## Save as intermediate CSV
+write_csv(full_soil30, here("data/natsgo/horizon30_CA.csv"))
+write_csv(full_soil100, here("data/natsgo/horizon100_CA.csv"))
+write_csv(full_soil200, here("data/natsgo/horizon200_CA.csv"))
+write_csv(full_soil.full, here("data/natsgo/horizonFull_CA.csv"))
+```
+
+Test extraction using raster
+```{r}
+## Read in gNATSGO raster, A.polycarpa data, and extract to get mus for points
+natsgo_r <- terra::rast(here("data/natsgo/MapunitRaster_10m_CA_2023.tif"))
+sppOcc <- read_csv(here('data/occ/combined_spp_occ/a_polycarpa_lowFilter.csv'))
+## Vectorize occurrence data so far
+    occ_vect <- sppOcc %>%
+      terra::vect(geom = c("lon", "lat"), crs = "WGS84") %>%
+      terra::project(y = crs(natsgo_r))
+    extract_df <- extract(natsgo_r, occ_vect,
+                          method = "simple", ID = FALSE) %>% 
+      cbind(sppOcc, .) %>% 
+      janitor::clean_names()
+    
+    test <- extract_df %>% 
+      mutate(mukey = as.character(mukey))
+    
+## Join with other data
+test.soil <- read_csv(here("data/natsgo/horizon30_CA.csv")) 
+  mutate(mukey=as.character(mukey))
+test.join = left_join(test, test.soil, by = "mukey")
+```
+
+
+### Test code:
+Trying `arcgisbinding` package to read in raster but not working. Maybe look into this more later, but for now just manually read in .gdb and exported raster from ArcGIS.
+```{r}
+## Install and load pkg
+install.packages("arcgisbinding", repos="https://r.esri.com", type="win.binary")
+library(arcgisbinding)
+## Need to run first to check ESRI license on computer
+arc.check_product()
+
+raster <- arc.open(here("data/ssurgo/gNATSGO_CA/gNATSGO_CA/MapunitRaster_10m_CA_2023.tif"))
+
+test <- arc.raster(arc.open(here("data/ssurgo/gNATSGO_CA/gNATSGO_CA.gdb")), "MapunitRaster_10m_CA_2023.tif")
+```
+
+
+# gSSURGO Data
 
 Info and link to site go here.
 https://websoilsurvey.nrcs.usda.gov/app/WebSoilSurvey.aspx
@@ -84,6 +328,8 @@ The following soil survey areas were omitted for lacking horizon-level data: CA6
 
 ### Download/merge data
 First we'll download and extract all the soil data for CA locally as geopackages. Then we'll read in horizon, component, and map unit data for each soil area and merge them. 
+
+Reading in data from SSURGO database:
 ```{r}
 ## List of soil survey areas in CA (w/horizon data)
 CA_surveyAreas = c("AZ649", "AZ656", "CA011", "CA013", "CA021", "CA031", 
@@ -114,7 +360,9 @@ CA_df = data.frame(template = CA_surveyAreas,
                    extraction.dir = here("data/ssurgo/extracted"))
 
 ## Download/extract each survey area
-pmap(CA_df, get_ssurgo)
+## Only needs to be run once
+## TAKES A LONG TIME! Commented out to be safe
+# pmap(CA_df, get_ssurgo)
 
 
 ## Read in/merge horizon data
@@ -178,7 +426,7 @@ Perform series of averages and joins to assign horizon data to each map unit.
 # [1] 19126
 # length(unique(mapunit$mukey))
 # [1] 19126
-# ## Matching # of mapunits (expected)
+# ## Matching number of mapunits (expected)
 
 
 ## Remove variables with all NAs
@@ -197,7 +445,7 @@ depth = chorizon %>%
   group_by(cokey) %>% 
   summarize(total_depth = max(hzdepb.r))
 
-## Remove horizons that start below 30cm
+## Remove horizons that start below 1m
 chorizon30 = chorizon %>% 
   filter(hzdept.r < 30) %>% 
   droplevels()
@@ -248,7 +496,7 @@ full_soil = component_horizon %>%
 ## convert commas to _ in muname so its csv compatible 
 full_soil <- full_soil %>% 
   mutate(muname = gsub(", ", "_", muname)) %>% 
-  dplyr::select(!c(mukind, mapunitlfw.l:mapunitlfw.h)) %>% 
+  dplyr::select(!c(mukind, mapunitlfw.l:mapunitlf.h)) %>% 
   ## convert mukey from dbl to char for spatial join step
   mutate(mukey = as.character(mukey))
 
@@ -288,33 +536,3 @@ st_write(ssurgo_sf_filter, here("data/ssurgo/ssurgo_ca_select.shp"))
 ssurgo_vect <- vect(ssurgo_sf)
 writeVector(ssurgo_vect, here("data/ssurgo/ssurgo_ca_full.shp"))
 ```
-
-
-### Old code
-Also found some rasters on Data Basin for pH (https://databasin.org/datasets/92c216fc8a0e41b9859b500de930ae7e/) and SOM (https://databasin.org/datasets/8cb1acdc738d4c9196435195b13bf972/).
-
-Used this code to have rasters match the resolution and spatial extent of the the BCM layers, then export. 
-As of now, not using because it's older (2008) and missing CEC. 
-```{r}
-## reference raster
-bcm = rast(here("data/bcmv8/2000_2022/ppt2020jan.tif"))
-
-## ssurgo rasters
-ph = rast(here("data/ssurgo/ssurgo_ph.tif"))
-som = rast(here("data/ssurgo/ssurgo_percent_som.tif"))
-
-## change resolution from 90m to 270m (factor of 3) 
-ph_270 <- aggregate(ph, fact=3, fun="mean", na.rm=TRUE) %>% 
-  project(y = bcm)
-## resample to ensure same extent
-ph_resamp <- resample(ph_270, bcm, method="bilinear")
-## export
-writeRaster(ph_resamp, here("data/ssurgo/ssurgo_ph_270m.tif"))
-
-## same with SOM
-som_270 <- aggregate(som, fact=3, fun="mean", na.rm=TRUE) %>% 
-  project(y=bcm)
-som_resamp <- resample(som_270, bcm, method="bilinear")
-writeRaster(som_resamp, here("data/ssurgo/ssurgo_som_270m.tif"))
-```
-
