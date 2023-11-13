@@ -222,7 +222,47 @@ swd <- swd[complete.cases(swd), ]
 write_csv(swd, here('data/swd/a_polycarpa/swd_a_polycarpa_200cm_lowFilter.csv'))
 ```
 
+
 ### Model fitting
+Fitting w/ENMeval
+- spatial partitioning methods preferable to random k-fold bc w/large occurrence dataset, it could randomly resut in spatial clustering. Other methods address spatial autocorrelation better (Roberts et al. 2017)
+```{r}
+library(ENMeval)
+
+### occ and background can only be lon/lat
+occ <- swdOcc %>% 
+  dplyr::select(x, y)
+
+bg <- swdBack %>% 
+  dplyr::select(x,y)
+
+block <- get.block(occ, bg, orientation = "lat_lon")
+## check for even number in each group
+# table(block$occs.grp)
+# 1   2   3   4 
+# 153 153 153 152 
+
+# Evaluating --------------------------------------
+occs.z <- swdOcc %>% 
+  dplyr::select(!c(month, year, presence))
+bg.z <- swdBack %>% 
+  dplyr::select(!c(month, year, presence))
+
+e.swd <- ENMevaluate(occs.z, bg=bg.z, algorith = "maxnet",
+                     tune.args = list(fc = c("L", "LQ","LQH", "LQHP"),
+                                      rm = seq(0.5, 5, by=0.5)), 
+                     partitions = "randomkfold", parallel = TRUE)
+
+e.swd
+eval.tune.settings(e.swd)
+eval.results(e.swd)
+eval.results.partitions(e.swd)
+evalplot.stats(e=e.swd, stats = c("or.mtp", "auc.val"), 
+               color = "fc", x.var = "rm", error.bars = FALSE)
+```
+
+
+Fitting w/dismo:
 ```{r}
 ## Read in all points
 swd <- read_csv(here('data/swd/swd_2000_2022.csv'))
