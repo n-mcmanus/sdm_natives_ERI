@@ -15,6 +15,8 @@ library(terra)                ## rast pkg for quicker reprojecting
 library(raster)               ## rast format that plays w/dismo
 library(enmSdmX)              ## spatially thinning data
 library(dismo)                ## generating background points
+library(tigris)               ## CA boundary shpfile
+library(FedData)              ## NLCD data
 ```
 
 This script filters and creates both the species occurrence and background point data files used for the species distribution model in the `kern_sdm` markdown.
@@ -207,7 +209,7 @@ for (i in 1:length(taxon_keys)) {
 } ## END LOOP
 ```
 
-
+*   For *L. pentachaeta*, occurrence ID 2421771841 was manually removed due to likely incorrect coordinates from the institution
 
 
 # Merge and Spatially Thin
@@ -312,7 +314,7 @@ Finally, random background occurrence points will be generated across all of Cal
 - Realistically this buffer would be determined by distribution of plant seeds
 ```{r}
 ## read in spp occurrence points
-sppOcc = read_csv(here("data/occ/combined_spp_occ/a_polycarpa_lowFilter.csv"))
+sppOcc = read_csv(here("data/occ/combined_spp_occ/l_pentachaeta_lowFilter.csv"))
 
 ## Fxn to generate background points
 back_pts <- function(sppOcc, buffer) {
@@ -348,8 +350,148 @@ back_pts <- function(sppOcc, buffer) {
 
 backOcc <- back_pts(sppOcc, buffer = 5000)
 
+test = backOcc %>% 
+  
+
 ### export
-write_csv(backOcc, here('data/background/back_a_polycarpa_lowfilter_5km.csv'))
+write_csv(backOcc, here('data/background/back_l_pentachaeta_lowfilter_5km.csv'))
+```
+
+
+### Remove heavy human land-use
+Finding areas of urban or heavy farming to remove from potential background points. 
+
+#### NLCD
+```{r}
+## Get CA boundary from 2021 census info
+ca_shp <- tigris::states(resolution = "500k") %>% 
+  janitor::clean_names() %>% 
+  filter(name == "California")
+
+## Download in NLCD data
+years <- c("2001", "2004", "2006", "2008", 
+           "2011", "2013", "2016", "2019", "2021")
+
+for (i in 1:length(years)) {
+  nlcd <- FedData::get_nlcd(template = ca_shp, label = "test",
+                            year = years[i],
+                            dataset = "landcover",
+                            extraction.dir = here("data/"))
+}
+```
+
+How many spp occ are on high/med intensity development? 
+```{r}
+## List only files with .tif extension (e.g. not .tif.aux)
+rast_list <- grep(list.files(here("data/nlcd/rasters")), 
+              pattern = ".tif.", invert = TRUE, value = TRUE)
+rast_yrs <- as.numeric(regmatches(rast_list, regexpr("[0-9].*[0-9]", rast_list)))
+rast_list_df <- data.frame(rast=rast_list,
+                           year=rast_yrs)
+
+names <- c("a_polycarpa", "a_menziesii", "p_ciliata", "l_pentachaeta")
+
+## Loop through land-use extractions at occ point
+## Output in tidy table
+nlcd_extract <- data.frame()
+plant_ext<- data.frame()
+# p in 1:length(names)
+for(p in 1:length(names)){
+  x <- read_csv(paste0(here("data/background/occ/combined_spp_occ//"), 
+                      names[p], "_lowFilter.csv"))
+  plant_ext <- data.frame()
+  
+    for(i in 1:nrow(rast_list_df)){
+      r <- rast(paste0(here("data/nlcd/rasters//"), rast_list_df$rast[i]))
+      if(i != nrow(rast_list_df)) {
+        x_range <- x %>% 
+               filter(year >= rast_list_df$year[i] 
+                      & year < rast_list_df$year[i+1])
+      ##If filtering to last date, no next row to look at
+      ##Just do 2021-present
+      } else {
+        x_range <- x %>% 
+               filter(year >= rast_list_df$year[i])
+      }
+      
+      ##If no entries in that time period, then skip to next 
+      if(nrow(x_range) > 0) {
+        v <- vect(x_range, geom = c("lon", "lat"), crs = "WGS84")
+        ext <- extract(r, v, ID = FALSE) %>% 
+          janitor::clean_names() %>% 
+          cbind(x_range, .)
+      } else {
+        next
+      }
+      ##One df of all extracts for plant
+      plant_ext <- rbind(plant_ext, ext)
+      
+    }##End inner loop
+  
+  ##Summarize data and add to one consistent df
+  ##nlcd_extract main output
+  plants <- plant_ext %>%
+    group_by(class) %>%
+    summarize(count = length(class)) %>%
+    mutate(count_pct = round(count/sum(.$count)*100,2),
+           species = names[p])
+
+  nlcd_extract <- rbind(nlcd_extract, plants)
+    
+}##End outer loop
+
+write_csv(nlcd_extract, here("data/nlcd/nlcd_occ_extract.csv"))
+
+## Look at some classes
+nlcd_summary <- nlcd_extract %>% 
+  filter(class %in% c("Developed, Low Intensity",
+                      "Developed, Medium Intensity",
+                      "Developed High Intensity",
+                      "Cultivated Crops")) 
+
+## Results in table for sharing
+library(kableExtra)
+nlcd_summary %>% 
+  filter(!species %in% c("a_polycarpa")) %>% 
+  kbl() %>% 
+  kable_styling(full_width=F, bootstrap_options = "striped")
+```
+
+Find all highly developed land between 2001-2021
+```{r}
+rast_list <- grep(list.files(here("data/nlcd/rasters"), full.names=FALSE), 
+              pattern = ".tif.", invert = TRUE, value = TRUE)
+rast_yrs <- as.numeric(regmatches(rast_list, regexpr("[0-9].*[0-9]", rast_list)))
+rast_list <- grep(list.files(here("data/nlcd/rasters"), full.names=TRUE), 
+              pattern = ".tif.", invert = TRUE, value = TRUE)
+rcl <- c(0, 23, NA,
+          24, 24, 1, 
+          25, 95, NA)
+rcl_m <- matrix(rcl, ncol = 3, byrow=TRUE)
+
+for (i in 1:length(rast_list)){
+  r <- rast(rast_list[i])
+  r_rcl <- classify(r, rcl_m, right = NA) %>% 
+    project(y = "epsg:5070")
+  
+  assign(paste0("rast_", rast_yrs[i]), r_rcl)
+}
+
+nlcd_dev <- rast_2001 + rast_2004 + rast_2006 + rast_2008 +
+  rast_2011 + rast_2016 + rast_2019 + rast_2021
+
+rcl_m <- matrix(c(), ncol=3, byrow=TRUE)
+
+nlcd_dev_rcl <- classify(nlcd_dev, rcl_m, right = NA)
+
+
+```
+
+High dev doesn't change at all??? - No, checked in Q and something in loop is wrong. Need to revisit
+
+#### FMMP
+```{r}
+
 ```
 
 
