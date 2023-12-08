@@ -350,11 +350,112 @@ back_pts <- function(sppOcc, buffer) {
 
 backOcc <- back_pts(sppOcc, buffer = 5000)
 
-test = backOcc %>% 
+
   
 
 ### export
 write_csv(backOcc, here('data/background/back_l_pentachaeta_lowfilter_5km.csv'))
+```
+
+Test for generating background points omitting development/farm land-use.
+A little tricky because land use changes through the years, and background points are assigned years/months at random.
+To account for this, we'll use a loop that generates points for one layer (with development as NA) and assign dates within that time span to the points, and save as data frame. This dataframe will then be read in as "presence points" when the next raster is read, to ensure that points aren't generated in the same cells. 
+**NOTE** Keeping at 37 per mo/yr for direct comparison, but in future change this to different # that makes match easier 
+```{r}
+## List NLCD rasters
+rasts <- grep(list.files(here("data/nlcd/rasters"), full.names=TRUE), 
+              pattern = ".tif.", invert = TRUE, value = TRUE)
+rast_list <- map(rasts, rast)
+## Years for looping
+yrs <- grep(list.files(here("data/nlcd/rasters"), full.names=FALSE), 
+              pattern = ".tif.", invert = TRUE, value = TRUE)
+rast_yrs <- ((as.numeric(regmatches(yrs, regexpr("[0-9].*[0-9]", yrs)))) - 1) %>% 
+  append(2022)
+
+## Reference raster for res and CA shape
+aet_r = rast(here("data/bcmv8/2000_2022/aet2020dec.tif")) %>% 
+  project(y=crs(rast_list[[1]]))
+
+## Reclassify so heavy development value 0, all else 1
+rcl_m <- matrix(c(0, 23, 1,
+                  24, 24, 0, 
+                  25, 95, 1), ncol = 3, byrow=TRUE)
+
+## Map reclass/mask fxn across raster list
+rast_list_rcl <- map(rast_list, function(x){
+  r <- classify(x, rcl_m, right=NA)
+  ## Change res from 30m to 270m
+  r_agg <- terra::aggregate(r, fact=9, fun="modal")
+  ## Resample to mask
+  r_resamp <- r_agg %>% 
+    resample(., aet_r, method = "near") %>% 
+    crop(., aet_r, mask=TRUE)
+})
+
+
+
+back_noDev <- function(sppOcc) {
+  ## Vectorize sppOcc, find convex hull of pts, 
+  ## then add buffer
+  sppZone <- convHull(vect(sppOcc, 
+                          geom = c("lon", "lat"),
+                          crs = "WGS84")) %>% 
+    buffer(., width = 5000)
+  ## Start df for loop ()
+  backSamp <- data.frame("x" = NA, "y" = NA, "month"=NA, "year"=NA)
+  
+  ## Loop through making background points
+  for (i in 1:length(rast_list_rcl)) {
+    ## Read in raster by year
+    rast <- rast_list_rcl[[i]] %>% 
+      project(y=crs(sppZone), method = "near") %>% 
+      crop(y=sppZone, mask = TRUE) %>% 
+      ## Turn 0 to NA
+      classify(x=., cbind(0, NA))
+    r <- raster(rast)
+    
+    ## Need slightly different rules for first iteration
+    ## First NLCD year is 2001, but we're making points back to 2000,
+    ## So need to "add a year" of data 
+    if (i == 1) {
+      backOcc <- randomPoints(mask = r, 
+                            n = (((rast_yrs[i+1] - rast_yrs[i])+1)*444),
+                            p = backSamp,
+                            excludep = TRUE,
+                            prob = FALSE)
+      backOcc <- as.data.frame(backOcc)
+    
+      dates <- data.frame(month = rep(1:12, each = 37),
+                          year = rep(2000:rast_yrs[i+1], each = 444))
+      dates <- rbind(tail(dates, 111), head(dates, -111))
+      dates[1:111, 2] = (dates[112,2] - 1)
+    } else {
+      backOcc <- randomPoints(mask = r, 
+                            n = ((rast_yrs[i+1] - rast_yrs[i])*444),
+                            p = backSamp,
+                            excludep = TRUE,
+                            prob = FALSE)
+      backOcc <- as.data.frame(backOcc)
+      dates <- data.frame(month = rep(1:12, each = 37),
+                          year = rep((rast_yrs[i]+1):rast_yrs[i+1], each = 444))
+      dates <- rbind(tail(dates, 111), head(dates, -111))
+      dates[1:111, 2] = (dates[112,2] - 1)
+    }
+    
+    back_dates <- cbind(backOcc, dates)
+    backSamp <- rbind(backSamp, back_dates)
+    
+  }##END loop
+  ## Remove placeholder "NA" row
+  backSamp <- backSamp[-1,]
+}##END fxn
+  
+sppOcc <- read_csv(here("data/occ/combined_spp_occ/a_menziesii_lowFilter.csv"))
+backSamp_noDev <- back_noDev(sppOcc)
+
+### export
+write_csv(backSamp_noDev,
+          here('data/background/back_a_menziesii_lowfilter_noDev_5km.csv'))
 ```
 
 
@@ -373,11 +474,13 @@ years <- c("2001", "2004", "2006", "2008",
            "2011", "2013", "2016", "2019", "2021")
 
 for (i in 1:length(years)) {
-  nlcd <- FedData::get_nlcd(template = ca_shp, label = "test",
+  nlcd <- FedData::get_nlcd(template = ca_shp, label = "CA",
                             year = years[i],
                             dataset = "landcover",
                             extraction.dir = here("data/"))
 }
+
+
 ```
 
 How many spp occ are on high/med intensity development? 
@@ -490,8 +593,135 @@ nlcd_dev_rcl <- classify(nlcd_dev, rcl_m, right = NA)
 High dev doesn't change at all??? - No, checked in Q and something in loop is wrong. Need to revisit
 
 #### FMMP
+Newer years (2016-present) put data in .gdb format rather than providing all the .shp files directly. Use the following fxn to extract all the layers, isolate prime farmland, and save as one .shp file for the year
 ```{r}
+## Read in all layers (counties) of .gdb
+path <- here("data/fmmp/2018/Important_Farmland_2018.gdb")
+lyrs <- st_layers(path)
+fxn <- function(lyr=lyrs$name) {
+  x <- st_read(dsn = path, layer=lyr) %>% 
+    dplyr::filter(polygon_ty == "P")
+}
+prime_farms <- purrr::map(lyrs$name, fxn, .progress=TRUE)
+
+## Combine all prime farmland from year into one sf
+counties <- data.frame()
+for (i in 1:length(prime_farms)){
+  x <- prime_farms[[i]]
+  counties <- rbind(counties, x)
+}
+
+## Save .shp
+filename <- here("data/fmmp/2018/prime_farmland_2018.shp")
+write_sf(counties, filename)
 
 ```
 
+For 2000-2014, we'll do the same process, but the code slightly differs because they aren't packaged in a .gdb
+```{r}
+## Overall fxn to read in, filter, merge, and write .shp for a year
+prime_farm_filter <- function(year) {
+  path <- paste0(here("data/fmmp//"), year, "/", year, "_FMMP_shape_files")
+  lyrs <- list.files(path, pattern = ".shp", full.names = TRUE)
+  fxn <- function(lyrs){
+    x <- st_read(dsn = lyrs) %>% 
+      dplyr::filter(polygon_ty=="P") %>% 
+      janitor::clean_names()
+  }
+  prime_farms <- purrr::map(lyrs, fxn)
+  
+  ## Combine all prime farmland from year into one sf
+  counties <- data.frame()
+  for (i in 1:length(prime_farms)){
+    x <- prime_farms[[i]]
+    counties <- rbind(counties, x)
+  }
 
+  ## Save .shp
+  filename <- paste0(here("data/fmmp/prime_farmland//"),
+                     "prime_farmland_", year, ".shp")
+  write_sf(counties, filename)
+}##End fxn
+
+
+## List of years
+year = seq(2000,2014, by=2)
+## Run fxn over all years
+purrr::map(year, prime_farm_filter, .progress=TRUE)
+```
+
+
+How many spp occ are on prime farmland?
+```{r}
+shp_list_df <- data.frame(shp = list.files(here("data/fmmp/prime_farmland/"), 
+                                           pattern = ".shp", full.names = TRUE ),
+                          year = seq(2000, 2020, by=2))
+
+names <- c("a_polycarpa", "a_menziesii", "p_ciliata", "l_pentachaeta")
+
+## Loop through land-use extractions at occ point
+## Output in tidy table
+fmmp_extract <- data.frame()
+plant_ext<- data.frame()
+# p in 1:length(names)
+for(p in 1:length(names)){
+  x <- read_csv(paste0(here("data/background/occ/combined_spp_occ//"), 
+                      names[p], "_lowFilter.csv"))
+  plant_ext <- data.frame()
+  
+    for(i in 1:nrow(shp_list_df)){
+      shp <- vect(shp_list_df$shp[i])
+      
+      if(i != nrow(shp_list_df)) {
+        x_range <- x %>% 
+               filter(year >= shp_list_df$year[i] 
+                      & year < shp_list_df$year[i+1])
+      ##If filtering to last date, no next row to look at
+      ##Just do 2021-present
+      } else {
+        x_range <- x %>% 
+               filter(year >= shp_list_df$year[i])
+      }
+      
+      ##If no entries in that time period, then skip to next 
+      if(nrow(x_range) > 0) {
+        v <- vect(x_range, geom = c("lon", "lat"), crs = "WGS84")
+        ext <- extract(shp, v, ID = FALSE) %>% 
+          janitor::clean_names() %>% 
+          cbind(x_range, .)
+      } else {
+        next
+      }
+      ##One df of all extracts for plant
+      plant_ext <- rbind(plant_ext, ext)
+      
+    }##End inner loop
+  
+  ##Summarize data and add to one consistent df
+  ##nlcd_extract main output
+  plants <- plant_ext %>%
+    group_by(class) %>%
+    summarize(count = length(class)) %>%
+    mutate(count_pct = round(count/sum(.$count)*100,2),
+           species = names[p])
+
+  nlcd_extract <- rbind(nlcd_extract, plants)
+    
+}##End outer loop
+
+write_csv(nlcd_extract, here("data/nlcd/nlcd_occ_extract.csv"))
+
+## Look at some classes
+nlcd_summary <- nlcd_extract %>% 
+  filter(class %in% c("Developed, Low Intensity",
+                      "Developed, Medium Intensity",
+                      "Developed High Intensity",
+                      "Cultivated Crops")) 
+
+## Results in table for sharing
+library(kableExtra)
+nlcd_summary %>% 
+  filter(!species %in% c("a_polycarpa")) %>% 
+  kbl() %>% 
+  kable_styling(full_width=F, bootstrap_options = "striped")
+```
