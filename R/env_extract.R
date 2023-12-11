@@ -23,8 +23,9 @@
 #' @return data frame with environmental values at point of species observation
 
 
-env_extract <- function(startYear, endYear, pathMonth, pathQuarter, soilRast, horizon,
-                        occ, lon = "lon", lat = "lat", crs = "WGS84") {
+env_extract <- function(startYear, endYear, pathMonth, pathQuarter, 
+                        soilRast, horizon, occ, 
+                        lon = "lon", lat = "lat", crs = "WGS84") {
   
   ## Warnings
   if (startYear < 2000)
@@ -140,12 +141,11 @@ env_extract <- function(startYear, endYear, pathMonth, pathQuarter, soilRast, ho
       mutate(mukey = as.character(mukey))
 
     ## Join soil data w/occ by mapunit
-    extract_df <- left_join(soilExtract_df, horizon, by = "mukey")
+    extract_df <- left_join(soilExtract_df, horizon, by = "mukey") %>% 
+      ## Remove unwanted variables
+      dplyr::select(!c(mukey, musym:muname))
       
-
-  
   
   return(extract_df)
-  
   
 } ### end fxn
