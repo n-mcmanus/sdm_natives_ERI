@@ -8,7 +8,7 @@
 #' convention of BCMv8 data. 
 #' 
 #' @author Nick McManus
-#' @param var character. Variable to be averaged (e.g. ppt, tmx, tmn)
+#' @param var character. Variable to be averaged (e.g. "ppt", "tmx", "tmn")
 #' @param quarter character. Which quarter to evaluate the variable over. `winter`: Dec, Jan, Feb. `summer`: Jun, Jul, Aug
 #' @param method character. `mean`: average the variables over the quarter. `sum`: find the cumulative value for the variable over the quarter.  
 #' @param startYear numeric or character. The first water year in dataset
