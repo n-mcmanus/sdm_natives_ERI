@@ -13,34 +13,38 @@ library(purrr)        ## run iterative fxns faster
 library(sf)           ## vector objects
 library(terra)        ## Better/faster GIS
 library(raster)       ## GIS format required by Dismo
-library(FedData)      ## Downloading SSURGO data
+library(tigris)       ## CA boundary shpfile
+library(FedData)      ## Downloading SSURGO & NLCD data
 ```
 
 
-This script is used for generating and prepping environmental data to be used in the SDM. 
+This script is used for generating and prepping environmental data to be used in the SDM script.
 
-# Convert ASC to TIF
 
-Publicly available BCMv8 files are in .asc format. ASCII files have associated coordinates but usually do not have an explicitly defined CRS when read in as a raster. Additionally, .tif have smaller file sizes than .asc, so conversion saves on data storage. The `asc_to_tif()` function converts an entire directory of .asc files to .tif files with appropriate CRS. BCM data uses NAD83 CA Albers (EPSG:3310), so this is the default for the function.
+# BCMv8 Data
+
+### Convert ASC to TIF
+
+Publicly available BCMv8 files are in .asc format. ASCII files have associated coordinates but usually do not have an explicitly defined CRS when read in as a raster. Because the SDM will be run in a samples with data (SWD) format, .asc files are not necessary to run MaxEnt. Additionally, .tif have smaller file sizes than .asc, so conversion saves on data storage. The `asc_to_tif()` function converts an entire directory of .asc files to .tif files with appropriate CR. BCM data uses NAD83 CA Albers (EPSG:3310), so this is the default for the function.
 ```{r}
 ## Read in fxn
 source(here('R/asc_to_tif.R'))
 
 ## Assign file path (selects all .asc files in directory)
-filepath = here('data/bcmv8/2000_2023//')
+filepath = here('data/bcmv8/2000_2022//')
 
 ## Run fxn
-asc_to_tif(filepath)
+asc_to_tif(filepath, remove = TRUE)
 ```
 
 
 
-# BCM Quarterly rasters
+### Quarterly rasters
 
 Using the `quarter_rast()` function, we'll generate rasters of either mean or cumulative values across the summer (Jun-Aug) or winter (Dec-Feb) quarter for each water year. These will then be used as additional environmental variables for extraction. 
 ```{r}
 ## Read in fxn
-source(here("R/quarterly_avg.R"))
+source(here("R/quarterly_rast.R"))
 
 ## Define fxn variables
 pathIn = here("data/bcmv8/2000_2022//")
@@ -66,7 +70,7 @@ quarter_rast(var="tmx", quarter="summer", method = "mean",
 
 
 # gNATSGO Data
-Due to the large number of species occurrences within NA pockets of CA gSSURGO data, we'll be using the gridded National Soil Survey Geographic Database (gNATSGO) for extracting soil data. NATSGO data combines SSURGO and STATSGO, prioritizing SSURGO data where available and filling in missing areas with lower-level STATSGO data. gNATSGO also differs from gSSURGO in that mapunit level data is spatialized as a 10m resolution raster rather than a vector. Due to the resolution of other environmental data and the coordinate precision with which species occurrence data is filtered, this raster should be satisfactory for extracting soil characteristics. 
+Due to the large number of species occurrences within NA pockets of California gSSURGO data, we'll be using the gridded National Soil Survey Geographic Database (gNATSGO) for extracting soil data. NATSGO data combines SSURGO and STATSGO, prioritizing SSURGO data where available and filling in missing areas with lower-level STATSGO data. gNATSGO also differs from gSSURGO in that mapunit level data is spatialized as a 10m resolution raster rather than a vector. Due to the resolution of other environmental data and the coordinate precision with which species occurrence data is filtered, this raster should be satisfactory for extracting soil characteristics. 
 
 gNATSGO data by state can be directly downloaded as an ESRI geodatabase (.gdb) from the USDA's Natural Resources Conservation Service (NRCS):
 https://nrcs.app.box.com/v/soils/folder/191785692827
@@ -79,19 +83,40 @@ https://www.nrcs.usda.gov/resources/data-and-reports/gridded-national-soil-surve
 
 The code and workflow for preparing gSSURGO data is still included in the following section for future reference. The workflow largely remains the same for both data sources.
 
-
 Reading in data from gNATSGO database saved locally
 ```{r}
 ## Read in using sf package to specify file in database
 ## Comes in as df
-chorizon = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"), layer = "chorizon")
-component = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"), layer = "component")
-mapunit = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"), layer = "mapunit")
+horizon = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"), 
+                   layer = "chorizon")
+component = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"), 
+                    layer = "component")
+mapunit = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"), 
+                  layer = "mapunit")
+
+## Read in fxn
+source(here('R/natsgo.R'))
+
+natsgo_avg(horizon, component, mapunit, 
+           depth = 200, pathOut = here("data/natsgo//"))
 ```
 
+Briefly exploring breakdown of component-level soil taxonomy 
+```{r, eval=FALSE}
+taxon_counts <- component %>% 
+  mutate(compkind = as.factor(compkind)) %>% 
+  filter(majcompflag == "Yes") %>% 
+  group_by(compkind) %>% 
+  summarize(n = length(compkind))
 
-Perform series of averages and joins to assign horizon data to each map unit.
-```{r}
+## How many components for each series?
+series_counts <- component %>% 
+  mutate(compname = as.factor(compname)) %>% 
+  filter(compkind == "Series") %>% 
+  filter(majcompflag == "Yes") %>% 
+  group_by(compname) %>% 
+  summarize(n = length(compname))
+
 # ## Quick check on number of unique values to
 # ## anticipate joining situation
 # length(unique(component$cokey))
@@ -104,194 +129,6 @@ Perform series of averages and joins to assign horizon data to each map unit.
 # length(unique(mapunit$mukey))
 # [1] 19258
 # ## Matching number of mapunits (expected)
-
-
-## Remove variables with all NAs
-not_all_na <- function(x) any(!is.na(x)) #for data cleaning
-
-chorizon <- chorizon %>% 
-  select_if(not_all_na)
-component <- component %>% 
-  select_if(not_all_na)
-mapunit <- mapunit %>% 
-  select_if(not_all_na)
-
-## HORIZON DATA ------------------------------------------------
-
-## Finding total soil depth
-depth = chorizon %>% 
-  group_by(cokey) %>% 
-  summarize(total_depth = max(hzdepb_r))
-  ## Most components less than 2m in depth
-
-### TESTING: How does soil depth affect model for A.polycarpa??
-### Running for 30cm, 1m, and 2m depths
-## Remove horizons that start below 30cm
-chorizon30 = chorizon %>%
-  filter(hzdept_r < 30) %>%
-  droplevels()
-chorizon100 = chorizon %>%
-  filter(hzdept_r < 100) %>%
-  droplevels()
-chorizon200 = chorizon %>%
-  filter(hzdept_r < 200) %>%
-  droplevels()
-
-## How many components still have more than 1 horizon
-## after filtering in last step?
-nrow(
-  chorizon30 %>% 
-    group_by(cokey) %>% 
-    summarize(count = n()) %>% 
-    filter(count > 1)
-  )
-# [1] 32253
-
-## To deal w/this, we'll summarize var of interest
-## w/weighted mean of horizon thickness (above cutoff)
-  ## 30cm cutoff
-  chorizon30_wmean = chorizon30 %>% 
-    ## find thickness of each horizon
-    mutate(thick = ifelse(hzdepb_r > 30, 30 - hzdept_r,
-                          hzdepb_r - hzdept_r)) %>% 
-    ## weighted mean of each variable by component
-    group_by(cokey) %>% 
-    summarize(om = round(weighted.mean(om_r, thick, na.rm = TRUE), 2),
-              cec = round(weighted.mean(cec7_r, thick, na.rm = TRUE), 2),
-              ph = round(weighted.mean(ph1to1h2o_r, thick, na.rm = TRUE),2)) %>% 
-    ## join w/depth
-    left_join(., depth, by = "cokey")
-  ## 100cm cutoff
-  chorizon100_wmean = chorizon100 %>% 
-    mutate(thick = ifelse(hzdepb_r > 100, 100 - hzdept_r,
-                          hzdepb_r - hzdept_r)) %>% 
-    group_by(cokey) %>% 
-    summarize(om = round(weighted.mean(om_r, thick, na.rm = TRUE), 2),
-              cec = round(weighted.mean(cec7_r, thick, na.rm = TRUE), 2),
-              ph = round(weighted.mean(ph1to1h2o_r, thick, na.rm = TRUE),2)) %>% 
-    left_join(., depth, by = "cokey")
-  ## 200cm cutoff
-  chorizon200_wmean = chorizon200 %>% 
-    ## find thickness of each horizon
-    mutate(thick = ifelse(hzdepb_r > 200, 200 - hzdept_r,
-                          hzdepb_r - hzdept_r)) %>% 
-    ## weighted mean of each variable by component
-    group_by(cokey) %>% 
-    summarize(om = round(weighted.mean(om_r, thick, na.rm = TRUE), 2),
-              cec = round(weighted.mean(cec7_r, thick, na.rm = TRUE), 2),
-              ph = round(weighted.mean(ph1to1h2o_r, thick, na.rm = TRUE),2)) %>% 
-    ## join w/depth
-    left_join(., depth, by = "cokey")
-  ## No cutoff
-  chorizon.full_wmean = chorizon %>% 
-    mutate(thick = hzdepb_r - hzdept_r) %>% 
-    group_by(cokey) %>% 
-    summarize(om = round(weighted.mean(om_r, thick, na.rm = TRUE), 2),
-              cec = round(weighted.mean(cec7_r, thick, na.rm = TRUE), 2),
-              ph = round(weighted.mean(ph1to1h2o_r, thick, na.rm = TRUE),2)) %>% 
-    ## join w/depth
-    left_join(., depth, by = "cokey")
-  
-## COMPONENT DATA ------------------------------------------------
-## Filter component data for variables of interest
-component = component %>% 
-  dplyr::select(c(comppct_r, compname, mukey, cokey))
-
-## join with horizon data
-component30_horizon = left_join(component, chorizon30_wmean, by = "cokey")
-component100_horizon = left_join(component, chorizon100_wmean, by = "cokey")
-component200_horizon = left_join(component, chorizon200_wmean, by = "cokey")
-component.full_horizon = left_join(component, chorizon.full_wmean, by = "cokey")
-
-
-## MAPUNIT DATA ------------------------------------------------
-## Find weighted average of variables based on % component in a mapunit
-  ## 30cm
-  full_soil30 = component30_horizon %>%
-    group_by(mukey) %>%
-    summarize(om = round(weighted.mean(om, comppct_r, na.rm = TRUE),2),
-              cec = round(weighted.mean(cec, comppct_r, na.rm = TRUE), 2),
-              ph = round(weighted.mean(ph, comppct_r, na.rm = TRUE),2)) %>%
-    ## join w/mapunit data
-    left_join(., mapunit, by = "mukey") %>%
-    ## convert commas to _ in muname so its csv compatible
-    mutate(muname = gsub(", ", "_", muname)) %>%
-    ## remove mapunit variables we don't care about
-    dplyr::select(!c(mukind:lkey))
-  
-  ## 100cm
-  full_soil100 = component100_horizon %>%
-    group_by(mukey) %>%
-    summarize(om = round(weighted.mean(om, comppct_r, na.rm = TRUE),2),
-              cec = round(weighted.mean(cec, comppct_r, na.rm = TRUE), 2),
-              ph = round(weighted.mean(ph, comppct_r, na.rm = TRUE),2)) %>%
-    ## join w/mapunit data
-    left_join(., mapunit, by = "mukey") %>%
-    ## convert commas to _ in muname so its csv compatible
-    mutate(muname = gsub(", ", "_", muname)) %>%
-    ## remove mapunit variables we don't care about
-    dplyr::select(!c(mukind:lkey)) %>%
-    ## convert mukey from dbl to char for spatial join step
-    mutate(mukey = as.character(mukey))
-
-  ## 200cm
-  full_soil200 = component200_horizon %>%
-    group_by(mukey) %>%
-    summarize(om = round(weighted.mean(om, comppct_r, na.rm = TRUE),2),
-              cec = round(weighted.mean(cec, comppct_r, na.rm = TRUE), 2),
-              ph = round(weighted.mean(ph, comppct_r, na.rm = TRUE),2)) %>%
-    ## join w/mapunit data
-    left_join(., mapunit, by = "mukey") %>%
-    ## convert commas to _ in muname so its csv compatible
-    mutate(muname = gsub(", ", "_", muname)) %>%
-    ## remove mapunit variables we don't care about
-    dplyr::select(!c(mukind:lkey)) %>%
-    ## convert mukey from dbl to char for spatial join step
-    mutate(mukey = as.character(mukey))
-
-    ## Full depth
-    full_soil.full = component.full_horizon %>%
-      group_by(mukey) %>%
-      summarize(om = round(weighted.mean(om, comppct_r, na.rm = TRUE),2),
-                cec = round(weighted.mean(cec, comppct_r, na.rm = TRUE), 2),
-                ph = round(weighted.mean(ph, comppct_r, na.rm = TRUE),2)) %>%
-      ## join w/mapunit data
-      left_join(., mapunit, by = "mukey") %>%
-      ## convert commas to _ in muname so its csv compatible
-      mutate(muname = gsub(", ", "_", muname)) %>%
-      ## remove mapunit variables we don't care about
-      dplyr::select(!c(mukind:lkey)) %>%
-      ## convert mukey from dbl to char for spatial join step
-      mutate(mukey = as.character(mukey))
-
-## Save as intermediate CSV
-write_csv(full_soil30, here("data/natsgo/horizon30_CA.csv"))
-write_csv(full_soil100, here("data/natsgo/horizon100_CA.csv"))
-write_csv(full_soil200, here("data/natsgo/horizon200_CA.csv"))
-write_csv(full_soil.full, here("data/natsgo/horizonFull_CA.csv"))
-```
-
-Test extraction using raster
-```{r}
-## Read in gNATSGO raster, A.polycarpa data, and extract to get mus for points
-natsgo_r <- terra::rast(here("data/natsgo/MapunitRaster_10m_CA_2023.tif"))
-sppOcc <- read_csv(here('data/occ/combined_spp_occ/a_polycarpa_lowFilter.csv'))
-## Vectorize occurrence data so far
-    occ_vect <- sppOcc %>%
-      terra::vect(geom = c("lon", "lat"), crs = "WGS84") %>%
-      terra::project(y = crs(natsgo_r))
-    extract_df <- extract(natsgo_r, occ_vect,
-                          method = "simple", ID = FALSE) %>% 
-      cbind(sppOcc, .) %>% 
-      janitor::clean_names()
-    
-    test <- extract_df %>% 
-      mutate(mukey = as.character(mukey))
-    
-## Join with other data
-test.soil <- read_csv(here("data/natsgo/horizon30_CA.csv")) 
-  mutate(mukey=as.character(mukey))
-test.join = left_join(test, test.soil, by = "mukey")
 ```
 
 
@@ -535,4 +372,271 @@ st_write(ssurgo_sf_filter, here("data/ssurgo/ssurgo_ca_select.shp"))
 ## some variable names changed by st_write...
 ssurgo_vect <- vect(ssurgo_sf)
 writeVector(ssurgo_vect, here("data/ssurgo/ssurgo_ca_full.shp"))
+```
+
+
+# NLCD
+Directly download NLCD data using the `FedData` package and a shapefile of CA provided by the `tigris` package. 
+```{r}
+## Get CA boundary from 2021 census info
+ca_shp <- tigris::states(resolution = "500k") %>% 
+  janitor::clean_names() %>% 
+  filter(name == "California")
+
+## Download in NLCD data
+years <- c("2001", "2004", "2006", "2008", 
+           "2011", "2013", "2016", "2019", "2021")
+
+for (i in 1:length(years)) {
+  nlcd <- FedData::get_nlcd(template = ca_shp, label = "CA",
+                            year = years[i],
+                            dataset = "landcover",
+                            extraction.dir = here("data/"))
+}
+
+```
+
+Now we're curious how many spp occ are on high/med intensity development?
+```{r}
+## List only files with .tif extension (e.g. not .tif.aux)
+rast_list <- grep(list.files(here("data/nlcd/rasters")), 
+              pattern = ".tif.", invert = TRUE, value = TRUE)
+rast_yrs <- as.numeric(regmatches(rast_list, regexpr("[0-9].*[0-9]", rast_list)))
+rast_list_df <- data.frame(rast=rast_list,
+                           year=rast_yrs)
+
+## Sample spp to test
+names <- c("a_polycarpa", "a_menziesii", "p_ciliata", "l_pentachaeta")
+
+## Loop through land-use extractions at occ point
+## Output in tidy table
+nlcd_extract <- data.frame()
+plant_ext<- data.frame()
+# p in 1:length(names)
+for(p in 1:length(names)){
+  x <- read_csv(paste0(here("data/background/occ/combined_spp_occ//"), 
+                      names[p], "_lowFilter.csv"))
+  plant_ext <- data.frame()
+  
+      for(i in 1:nrow(rast_list_df)){
+        r <- rast(paste0(here("data/nlcd/rasters//"), rast_list_df$rast[i]))
+        if(i != nrow(rast_list_df)) {
+          x_range <- x %>% 
+                 filter(year >= rast_list_df$year[i] 
+                        & year < rast_list_df$year[i+1])
+        ##If filtering to last date, no next row to look at
+        ##Just do 2021-present
+        } else {
+          x_range <- x %>% 
+                 filter(year >= rast_list_df$year[i])
+        }
+        
+        ##If no entries in that time period, then skip to next 
+        if(nrow(x_range) > 0) {
+          v <- vect(x_range, geom = c("lon", "lat"), crs = "WGS84")
+          ext <- extract(r, v, ID = FALSE) %>% 
+            janitor::clean_names() %>% 
+            cbind(x_range, .)
+        } else {
+          next
+        }
+        
+        ##One df of all extracts for plant
+        plant_ext <- rbind(plant_ext, ext)
+        
+      }##End inner loop
+  
+  ##Summarize data and add to one consistent df
+  ##nlcd_extract main output
+  plants <- plant_ext %>%
+    group_by(class) %>%
+    summarize(count = length(class)) %>%
+    mutate(count_pct = round(count/sum(.$count)*100,2),
+           species = names[p])
+
+  nlcd_extract <- rbind(nlcd_extract, plants)
+    
+}##End outer loop
+
+## Save df for future reference
+write_csv(nlcd_extract, here("data/nlcd/nlcd_occ_extract.csv"))
+
+## Look at land use classes of interest
+nlcd_summary <- nlcd_extract %>% 
+  filter(class %in% c("Developed, Low Intensity",
+                      "Developed, Medium Intensity",
+                      "Developed High Intensity",
+                      "Cultivated Crops")) 
+
+## Results in table for sharing
+library(kableExtra)
+nlcd_summary %>% 
+  filter(!species %in% c("a_polycarpa")) %>% 
+  kbl() %>% 
+  kable_styling(full_width=F, bootstrap_options = "striped")
+```
+
+
+# FMMP
+Farmland Mapping & Monitoring Program data is used to explore more detailed farmland classifications. This data is downloaded directly from the CA Dept of Conservation:
+https://gis.conservation.ca.gov/portal/home/group.html?id=b1494c705cb34d01acf78f4927a75b8f#overview
+
+Newer years (2016-present) format data as .gdb, while older years just provide all .shp files in one folder. The following code chunk is used to extract all the layers (counties) from the newer .gdb data, isolate prime farmland, and save as one .shp file for the year
+```{r}
+save_prime_fxn <- function(year) {
+  ## Read in all layers (counties) of .gdb
+  path <- paste0(here("data/fmmp//"), year, 
+                 "/Important_Farmland_", year, ".gdb")
+  lyrs <- st_layers(path)
+  filter_prime <- function(lyr=lyrs$name) {
+    x <- read_sf(dsn = path, layer=lyr) %>% 
+      dplyr::filter(polygon_ty == "P")
+  }
+  prime_farms <- purrr::map(lyrs$name, filter_prime, .progress=TRUE)
+
+  ## Combine all prime farmland from year into one sf
+  counties <- data.frame()
+  for (i in 1:length(prime_farms)){
+    x <- prime_farms[[i]]
+    counties <- rbind(counties, x)
+  }
+  
+  ## Save .shp
+  filename <- paste0(here("data/fmmp/prime_farmland/prime_farmland_"), 
+                     year, ".shp")
+  write_sf(counties, filename)
+  
+  ## Changes names when saving (cannot figure out why)
+  ## So for making live easier, manually change all names
+  ## and resave to match 2000-2014 data
+  sf <- read_sf(paste0(here("data/fmmp/prime_farmland/prime_farmland_"), 
+                     year, ".shp"))
+  sf_rename <- sf %>% 
+    rename(polygon_ac = plygn_c,
+         county_nam = cnty_nm,
+         upd_year = upd_yer,
+         polygon_ty = plygn_t,
+         Shape_Length = Shp_Lng,
+         Shape_Area = Shap_Ar,
+         Shape = geometry) %>% 
+    vect()
+  writeVector(sf_rename, (paste0(here("data/fmmp/prime_farmland/prime_farmland_"),
+                                 year, ".shp")), overwrite=TRUE)
+}
+
+year <- c(2016, 2018, 2020)
+purrr::map(years, save_prime_fxn, .progress=TRUE)
+```
+
+For 2000-2014, we'll do the same process, but the code slightly differs due to data format.
+```{r}
+## Overall fxn to read in, filter, merge, and write .shp for a year
+prime_farm_filter <- function(year) {
+  path <- paste0(here("data/fmmp//"), year, "/", year, "_FMMP_shape_files")
+  lyrs <- list.files(path, pattern = ".shp", full.names = TRUE)
+  fxn <- function(lyrs){
+    x <- st_read(dsn = lyrs) %>% 
+      dplyr::filter(polygon_ty=="P") %>% 
+      janitor::clean_names()
+  }
+  prime_farms <- purrr::map(lyrs, fxn)
+  
+  ## Combine all prime farmland from year into one sf
+  counties <- data.frame()
+  for (i in 1:length(prime_farms)){
+    x <- prime_farms[[i]]
+    counties <- rbind(counties, x)
+  }
+
+  ## Save .shp
+  filename <- paste0(here("data/fmmp/prime_farmland//"),
+                     "prime_farmland_", year, ".shp")
+  write_sf(counties, filename)
+}##End fxn
+
+
+## List of years
+year = seq(2000,2014, by=2)
+## Run fxn over all years
+purrr::map(year, prime_farm_filter, .progress=TRUE)
+```
+
+
+How many spp occ are on prime farmland?
+-**NOTE:** This loop doesn't fully work, because for a couple years (2016-2020) the extract returns multiple identical values (that aren't filtered out through `unique()` somehow). This returns an extraction df w/a different number of rows than the df of obs going into it, so they cannot be bound properly. 
+```{r}
+shp_list <- list.files(here("data/fmmp/prime_farmland/"), 
+                          pattern = ".shp", full.names = TRUE )
+year <- seq(2000, 2020, by=2)
+names <- c("a_polycarpa", "a_menziesii", "p_ciliata", "l_pentachaeta")
+
+## Loop through land-use extractions at occ point
+## Output in tidy table
+fmmp_extract <- data.frame()
+# p in 1:length(names)
+for(p in 1:length(names)){
+  x <- read_csv(paste0(here("data/occ/combined_spp_occ//"), 
+                      names[p], "_lowFilter.csv"))
+  plant_ext <- data.frame()
+    
+    ## Extract for each year of FMMP data
+    for(i in 1:length(shp_list)){
+      shp <- vect(shp_list[i])
+      
+      ## For 2020 FMMP, just extract from 2020-2023
+      if (i != length(shp_list)) {
+        x_range <- x %>% 
+               filter(year >= year[i] 
+                      & year < year[i+1])
+      } else {
+        x_range <- x %>% 
+               filter(year >= year[i])
+      }
+      
+      ## Vectorize and extract obs w/in date range
+      if(nrow(x_range) > 0) {
+        v <- vect(x_range, geom = c("lon", "lat"), crs = "WGS84") %>% 
+          project(y=crs(shp))
+        ext <- extract(shp, v) %>% 
+          janitor::clean_names() %>% 
+          dplyr::select(polygon_ty) %>% 
+          cbind(x_range, .)
+      ## If no entries w/in date range, skip to next 
+      } else {
+        next
+      }
+      
+      ##One df of all extracts for plant
+      plant_ext <- rbind(plant_ext, ext)
+      
+    }##End inner loop
+
+  ##Summarize data and add to one consistent df
+  ##nlcd_extract main output
+  plants <- plant_ext %>%
+    mutate(prime = case_when(polygon_ty == "P" ~ 1),
+           species = names[p]) %>% 
+    group_by(species) %>%
+    summarize(count = sum(prime, na.rm=TRUE),
+              count_pct = round((sum(prime, na.rm=TRUE))/length(polygon_ty)*100,2))
+
+  fmmp_extract <- rbind(fmmp_extract, plants)
+    
+}##End outer loop
+
+write_csv(nlcd_extract, here("data/nlcd/nlcd_occ_extract.csv"))
+
+## Look at some classes
+nlcd_summary <- nlcd_extract %>% 
+  filter(class %in% c("Developed, Low Intensity",
+                      "Developed, Medium Intensity",
+                      "Developed High Intensity",
+                      "Cultivated Crops")) 
+
+## Results in table for sharing
+library(kableExtra)
+nlcd_summary %>% 
+  filter(!species %in% c("a_polycarpa")) %>% 
+  kbl() %>% 
+  kable_styling(full_width=F, bootstrap_options = "striped")
 ```
