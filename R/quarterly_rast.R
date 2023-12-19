@@ -11,8 +11,8 @@
 #' @param var character. Variable to be averaged (e.g. "ppt", "tmx", "tmn")
 #' @param quarter character. Which quarter to evaluate the variable over. `winter`: Dec, Jan, Feb. `summer`: Jun, Jul, Aug
 #' @param method character. `mean`: average the variables over the quarter. `sum`: find the cumulative value for the variable over the quarter.  
-#' @param startYear numeric or character. The first water year in dataset
-#' @param endYear numeric or character. The last water year in dataset
+#' @param startYear numeric or character. The first water year in data set
+#' @param endYear numeric or character. The last water year in data set
 #' @param pathIn character. Path to input directory of env data rasters
 #' @param pathOut character. Path to output directory where new rasters will be saved
 #' @return TIFs of the average or cumulative quarterly data for each water year in the date range provided.
