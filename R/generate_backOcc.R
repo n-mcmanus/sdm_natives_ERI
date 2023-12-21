@@ -45,14 +45,14 @@ backOcc <- function(sppOcc, raster, buffer, back_n = 10000,
     mutate(occ_n_pct = occ_n/sum(.$occ_n))
   
   ## list of water years
-  wy <- rep(2000:2022, each = 1)
+  w_years <- rep(2000:2022, each = 1)
   
   ## Start df for loop ()
   backOcc_total <- data.frame("x" = NA, "y" = NA, 
                               "month"=NA, "year" = NA, "wy" = NA)
   
   ## Progress bar (fxn can take long time to run)
-  runLength <- length(wy)
+  runLength <- length(w_years)
   pb <- txtProgressBar(min = 0,
                        max = runLength,
                        style = 3,
@@ -60,9 +60,9 @@ backOcc <- function(sppOcc, raster, buffer, back_n = 10000,
                        char = "=")
   
   ## Loop through every yr to generate bkg pts ----------------------------
-  for (i in 1:length(wy)) {
+  for (i in 1:length(w_years)) {
     occ_filt <- occ_count %>% 
-      dplyr::filter(wy == wy[i])
+      dplyr::filter(wy == w_years[i])
     
     ## If occs in wy, then generate number bkg pts based on occ ratio
     if(nrow(occ_filt) != 0) {
@@ -84,12 +84,12 @@ backOcc <- function(sppOcc, raster, buffer, back_n = 10000,
       
       ## Assign mo/yr to new bkg pts
       dates <- data.frame(month = rep(c(10:12, 1:9), 
-                                      each = (nrow(backOcc)/12)),
-                          wy = wy[i])
+                                      each = (n/12)),
+                          wy = w_years[i])
       backOcc_dates <- cbind(backOcc, dates) %>% 
         ## want calendar year for later extraction
-        mutate(year = case_when(month %in% c(10, 11, 12) ~(wy[i]-1),
-                                .default = wy[i]))
+        mutate(year = case_when(month %in% c(10, 11, 12) ~(w_years[i]-1),
+                                .default = w_years[i]))
       
       ## Bind loop results to ongoing df
       backOcc_total <- rbind(backOcc_total, backOcc_dates)
