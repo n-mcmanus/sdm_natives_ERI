@@ -26,6 +26,10 @@ This script is used for generating and prepping environmental data to be used in
 ### Convert ASC to TIF
 
 Publicly available BCMv8 files are in .asc format. ASCII files have associated coordinates but usually do not have an explicitly defined CRS when read in as a raster. Because the SDM will be run in a samples with data (SWD) format, .asc files are not necessary to run MaxEnt. Additionally, .tif have smaller file sizes than .asc, so conversion saves on data storage. The `asc_to_tif()` function converts an entire directory of .asc files to .tif files with appropriate CR. BCM data uses NAD83 CA Albers (EPSG:3310), so this is the default for the function.
+
+BCMv8 data can be directly downloaded from USGS at:
+https://www.sciencebase.gov/catalog/item/5f29c62d82cef313ed9edb39
+
 ```{r}
 ## Read in fxn
 source(here('R/asc_to_tif.R'))
@@ -151,7 +155,6 @@ test <- arc.raster(arc.open(here("data/ssurgo/gNATSGO_CA/gNATSGO_CA.gdb")), "Map
 
 Info and link to site go here.
 https://websoilsurvey.nrcs.usda.gov/app/WebSoilSurvey.aspx
-
 
 Directly downloading and extracting the most recent (2019) SSURGO data with the `FedData` package. 
 
@@ -283,14 +286,14 @@ depth = chorizon %>%
   summarize(total_depth = max(hzdepb.r))
 
 ## Remove horizons that start below 1m
-chorizon30 = chorizon %>% 
-  filter(hzdept.r < 30) %>% 
+chorizon200 = chorizon %>% 
+  filter(hzdept.r < 200) %>% 
   droplevels()
 
 ## How many components still have more than 1 horizon
 ## after filtering in last step?
 nrow(
-  chorizon30 %>% 
+  chorizon200 %>% 
     group_by(cokey) %>% 
     summarize(count = n()) %>% 
     filter(count > 1)
@@ -299,9 +302,9 @@ nrow(
 
 ## To deal w/this, we'll summarize var of interest
 ## w/weighted mean of horizon thickness (above 30cm cutoff)
-chorizon30_wmean = chorizon30 %>% 
+chorizon200_wmean = chorizon200 %>% 
   ## find thickness of each horizon
-  mutate(thick = ifelse(hzdepb.r > 30, 30 - hzdept.r,
+  mutate(thick = ifelse(hzdepb.r > 200, 200 - hzdept.r,
                         hzdepb.r - hzdept.r)) %>% 
   ## weighted mean of each variable by component
   group_by(cokey) %>% 
@@ -317,7 +320,7 @@ component = component %>%
   dplyr::select(c(comppct.r, compname, slope.r, mukey, cokey))
 
 ## join with horizon data
-component_horizon = left_join(component, chorizon30_wmean, by = "cokey")
+component_horizon = left_join(component, chorizon200_wmean, by = "cokey")
 
 ## Find weighted average of variables based on % component in a mapunit
 full_soil = component_horizon %>% 
@@ -396,7 +399,7 @@ for (i in 1:length(years)) {
 
 ```
 
-Now we're curious how many spp occ are on high/med intensity development?
+Exploring how many sppOcc are on high/med intensity development?
 ```{r}
 ## List only files with .tif extension (e.g. not .tif.aux)
 rast_list <- grep(list.files(here("data/nlcd/rasters")), 
