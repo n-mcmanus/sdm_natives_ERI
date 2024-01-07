@@ -25,7 +25,7 @@ This script is used for generating and prepping environmental data to be used in
 
 ### Convert ASC to TIF
 
-Publicly available BCMv8 files are in .asc format. ASCII files have associated coordinates but usually do not have an explicitly defined CRS when read in as a raster. Because the SDM will be run in a samples with data (SWD) format, .asc files are not necessary to run MaxEnt. Additionally, .tif have smaller file sizes than .asc, so conversion saves on data storage. The `asc_to_tif()` function converts an entire directory of .asc files to .tif files with appropriate CR. BCM data uses NAD83 CA Albers (EPSG:3310), so this is the default for the function.
+Publicly available BCMv8 files are in .asc format. ASCII files have associated coordinates but usually do not have an explicitly defined CRS when read in as a raster. Because the SDM will be run in a samples with data (SWD) format, .asc files are not necessary to run MaxEnt. Additionally, .tif have smaller file sizes than .asc, so conversion saves on data storage. The `asc_to_tif()` function converts an entire directory of .asc files to .tif files with appropriate CR. BCM data uses CA Albers NAD83 (EPSG:3310), so this is the default for the function.
 
 BCMv8 data can be directly downloaded from USGS at:
 https://www.sciencebase.gov/catalog/item/5f29c62d82cef313ed9edb39
@@ -73,8 +73,78 @@ quarter_rast(var="tmx", quarter="summer", method = "mean",
 ```
 
 
+### Avg monthly rasters:
+
+To generate distribution probabilities by month, we'll also need to average monthly data over the entire time period (2000-2022 wy). First, we'll find the averages for the base BCM variables. Then, we'll have to use a slightly different function to find averaged temperature difference (tmax-tmin). 
+
+Averages of base BCM variables:
+```{r}
+## df of variables to avg
+vars <- data.frame(variable = rep(c("aet", "ppt", "tmn", "tmx"), each = 12),
+                   month = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                             'jul', 'aug', 'sep', 'oct', 'nov', 'dec'))
+
+## Fxn to avg -------------------------------------------------
+  var_avg <- function(variable, month, pathIn, pathOut) {
+    ## Read in all files for that var/mo
+    files <- list.files(path = pathIn, 
+                        ## only list those with matching yr/mo in name
+                        pattern = paste0(variable, ".+", month),
+                        full=TRUE)
+    ## Stack and avg
+    stack <- terra::rast(c(files))
+    stack_avg <- terra::app(stack, fun = 'mean')
+    
+    ## Save
+    writeRaster(stack_avg, 
+                paste0(pathOut, variable, "_", month, "_avg.tif"), 
+                overwrite = TRUE)
+  }
+
+## Run fxn w/pmap
+pathIn = here("data/bcmv8/2000_2022//")
+pathOut = here("data/bcmv8/monthly_avgs//")
+purrr::pmap(.l=vars, .f=var_avg, pathIn, pathOut, .progress = TRUE)
+```
+
+Average of tdiff:
+```{r}
+vars <- data.frame(month = c('oct', 'nov', 'dec', 'jan', 'feb', 'mar', 
+                              'apr', 'may', 'jun', 'jul', 'aug', 'sep'))
+
+tdiff_avg <- function(month, pathIn, pathOut) {
+  ## stack all tmx and tmn by month
+  tmx.list <- list.files(path = pathIn,
+                    pattern = paste0("tmx", ".+", month),
+                    full.names = TRUE)
+  tmn.list <- list.files(path = pathIn,
+                    pattern = paste0("tmn", ".+", month),
+                    full.names = TRUE)
+  
+  tmx <- terra::rast(c(tmx.list))
+  tmn <- terra::rast(c(tmn.list))
+  
+  ## Find tdiff by month, then avg 
+  tdiff <- tmx - tmn
+  avg <- terra::app(tdiff, fun = "mean")
+  
+  ## Save
+  writeRaster(avg, 
+              paste0(pathOut, "tdiff_", month, "_avg.tif"), 
+              overwrite = TRUE)
+}
+
+## Run fxn w/pmap
+pathIn = here("data/bcmv8/2000_2022//")
+pathOut = here("data/bcmv8/monthly_avgs//")
+purrr::pmap(.l=vars, .f=tdiff_avg, pathIn, pathOut, .progress = TRUE)
+```
+
+
+
+
 # gNATSGO Data
-Due to the large number of species occurrences within NA pockets of California gSSURGO data, we'll be using the gridded National Soil Survey Geographic Database (gNATSGO) for extracting soil data. NATSGO data combines SSURGO and STATSGO, prioritizing SSURGO data where available and filling in missing areas with lower-level STATSGO data. gNATSGO also differs from gSSURGO in that mapunit level data is spatialized as a 10m resolution raster rather than a vector. Due to the resolution of other environmental data and the coordinate precision with which species occurrence data is filtered, this raster should be satisfactory for extracting soil characteristics. 
+Due to the large number of species occurrences within NA pockets of California gSSURGO data, we'll be using the gridded National Soil Survey Geographic Database (gNATSGO) for extracting soil data. NATSGO data combines SSURGO and STATSGO, prioritizing SSURGO data where available and filling in missing areas with lower-level STATSGO data. gNATSGO also differs from gSSURGO in that mapunit level data is provided as a 10m resolution raster rather than a vector. Due to the resolution of other environmental data and the coordinate precision with which species occurrence data is filtered, this raster should be satisfactory for extracting soil characteristics. 
 
 gNATSGO data by state can be directly downloaded as an ESRI geodatabase (.gdb) from the USDA's Natural Resources Conservation Service (NRCS):
 https://nrcs.app.box.com/v/soils/folder/191785692827
@@ -82,12 +152,14 @@ https://nrcs.app.box.com/v/soils/folder/191785692827
 More information about the database can be found on the NRCS' website:
 https://www.nrcs.usda.gov/resources/data-and-reports/gridded-national-soil-survey-geographic-database-gnatsgo#download
 
-
 **NOTE:** While tabular data from .gdb can be read into R, I have not yet found a method for directly reading in the mapunit raster. Currently, this raster is obtained by opening the .gdb in ArcGIS Pro and exporting the raster as a .tif file.
 
 The code and workflow for preparing gSSURGO data is still included in the following section for future reference. The workflow largely remains the same for both data sources.
 
-Reading in data from gNATSGO database saved locally
+
+### Soil aggregation
+
+Here we'll read in data from the locally saved gNATSGO .gdb. These data are inputs to the `natsgo_avg()` function, which aggregates horizon-level soil properties to mapunits.
 ```{r}
 ## Read in using sf package to specify file in database
 ## Comes in as df
@@ -102,7 +174,8 @@ mapunit = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"),
 source(here('R/natsgo.R'))
 
 natsgo_avg(horizon, component, mapunit, 
-           depth = 200, pathOut = here("data/natsgo//"))
+           depth = 200, pathOut = here("data//"))
+
 ```
 
 Briefly exploring breakdown of component-level soil taxonomy 
@@ -136,7 +209,61 @@ series_counts <- component %>%
 ```
 
 
-### Test code:
+### Soil rasters
+To run the SDM for each month, need to have NATSGO soil data as rasters that stack with the monthly BCM data. Now that the soil data has been aggregated by mapunit, we'll reclassify the mapunit raster to generate one raster for each soil variable in the model (cec, ph, om, taxonomy).
+
+Raw gNATSGO raster is 10m resolution, which has been too small to reclassify on available servers. We'll first lower the resolution to 270m, to match BCM data:
+```{r}
+## Read in soil data and raster
+mu_r <- rast(here("data/natsgo/MapunitRaster_10m_CA_2023.tif"))
+## Change resolution to 270m
+mu270_r <- aggregate(mu_r, fact=27, fun="modal")
+writeRaster(mu270_r, here("data/natsgo/MapunitRaster_270m_CA_2023.tif"))
+```
+
+Now we'll reclassify the mapunit raster to aggregated soil data and match extent of BCM rasters:
+```{r}
+## Read in soil data and rasters
+soil_df <- read_csv(here("data/natsgo/horizon200_CA.csv"))
+mu270_r <- rast(here("data/natsgo/MapunitRaster_270m_CA_2023.tif"))
+bcm_r<- rast(here("data/bcmv8/monthly_avgs/tmx_jan_avg.tif")) #sample bcm raster
+# soil_names = read_csv(here("data/natsgo/filterfirst_series_200.csv")) %>% 
+# mutate(compname_fct = as.factor(compname))  %>% 
+#   mutate(compname_fct = unclass(compname_fct)) %>% 
+#   mutate(compname_fct = as.numeric(compname_fct))
+#   mutate(compname_fct = as.factor(compname_fct))
+
+
+### Fxn to reclassify for all soil variables
+### Make output rasters match ext of BCM to stack later
+soil_rast <- function(soil_var) {
+  ## Select one variable at a time
+  rcl <- soil_df %>% 
+    dplyr::select(mukey, soil_var) %>% 
+    rbind(c(0, NA)) #make outside areas NA
+  
+  ## reclassify
+  rcl_r <- classify(mu270_r, rcl)
+  
+  ## match crs & extent for stacking
+  rcl_resamp_r <- rcl_r %>% 
+    project(y = crs(bcm_r), method="bilinear") %>% 
+    resample(y = bcm_r, method="bilinear")
+  
+  ## Save
+  writeRaster(rcl_resamp_r, paste0(here("data/natsgo//NATSGO_"),
+                                   soil_var, "_270m_CA_2023.tif"),
+              overwrite = TRUE)
+}
+
+## variable names must match columns in `soil_df`
+soil_var = c("cec", "ph", "om")
+
+purrr::map(soil_var, soil_rast, .progress = TRUE)
+```
+
+
+### ArcGIS test code:
 Trying `arcgisbinding` package to read in raster but not working. Maybe look into this more later, but for now just manually read in .gdb and exported raster from ArcGIS.
 ```{r}
 ## Install and load pkg
@@ -279,13 +406,7 @@ component <- component %>%
 mapunit <- mapunit %>% 
   select_if(not_all_na)
 
-
-## Finding total soil depth.... not sure why this is a step
-depth = chorizon %>% 
-  group_by(cokey) %>% 
-  summarize(total_depth = max(hzdepb.r))
-
-## Remove horizons that start below 1m
+## Remove horizons that start below 2m
 chorizon200 = chorizon %>% 
   filter(hzdept.r < 200) %>% 
   droplevels()
@@ -310,9 +431,7 @@ chorizon200_wmean = chorizon200 %>%
   group_by(cokey) %>% 
   summarize(om = round(weighted.mean(om.r, thick, na.rm = TRUE), 2),
             cec = round(weighted.mean(cec7.r, thick, na.rm = TRUE), 2),
-            ph = round(weighted.mean(ph1to1h2o.r, thick),2)) %>% 
-  ## join w/depth
-  left_join(., depth, by = "cokey")
+            ph = round(weighted.mean(ph1to1h2o.r, thick),2))
 
 
 ## Filter component data for variables of interest
@@ -336,12 +455,12 @@ full_soil = component_horizon %>%
 ## convert commas to _ in muname so its csv compatible 
 full_soil <- full_soil %>% 
   mutate(muname = gsub(", ", "_", muname)) %>% 
-  dplyr::select(!c(mukind, mapunitlfw.l:mapunitlf.h)) %>% 
+  dplyr::select(!c(mukind, mapunitlfw.l:lkey)) %>% 
   ## convert mukey from dbl to char for spatial join step
   mutate(mukey = as.character(mukey))
 
 ## Save as intermediate CSV
-write_csv(full_soil, here("data/ssurgo/horizon_CA.csv"))
+write_csv(full_soil, here("data/ssurgo/horizon200_CA.csv"))
 ```
 
 
@@ -366,15 +485,15 @@ ssurgo_sf <- ssurgo_sf %>%
 
 ## Create separate sf for variables to be extracted
 ssurgo_sf_filter <- ssurgo_sf %>% 
-  dplyr::select(om, ph, cec)
+  dplyr::select(mukey, om, ph, cec)
 
 ## Save as .shp
-st_write(ssurgo_sf_filter, here("data/ssurgo/ssurgo_ca_select.shp"))
+st_write(ssurgo_sf_filter, here("data/ssurgo/ssurgo_ca_200cm_select.shp"))
 
 ## convert to vect first
 ## some variable names changed by st_write...
 ssurgo_vect <- vect(ssurgo_sf)
-writeVector(ssurgo_vect, here("data/ssurgo/ssurgo_ca_full.shp"))
+writeVector(ssurgo_vect, here("data/ssurgo/ssurgo_ca_200cm_full.shp"))
 ```
 
 
