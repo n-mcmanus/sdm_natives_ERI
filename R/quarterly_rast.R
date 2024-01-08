@@ -29,17 +29,13 @@ quarter_rast <- function(var, quarter, method, startYear, endYear, pathIn, pathO
 
     
   ## Create df for variables to avg  -----------------------------------------
-  dates_df <- data.frame(variable = rep(var, each = 12),
-                     month = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
-                               'jul', 'aug', 'sep', 'oct', 'nov', 'dec'),
-                     year = rep(startYear:endYear, each = 12))
-  
-  ## Rearrange to water year format
-  ## Put Oct-Dec at start, then adjust calendar year
-  dates_df <- rbind(tail(dates_df, 3), head(dates_df, -3))
-  dates_df[1:3, 3] = (dates_df[4,3] - 1)
-  dates_df <- mutate(dates_df,
-                     wy = rep(startYear:endYear, each = 12))
+  dates_df <- data.frame(variable = rep(var, each=12),
+                         month = c('oct', 'nov', 'dec', 'jan', 'feb', 'mar', 
+                                   'apr', 'may', 'jun', 'jul', 'aug', 'sep'),
+                         wy = rep(startYear:endYear, each = 12)) %>% 
+    mutate(year = case_when(month %in% c('oct', 'nov', 'dec') ~(.$wy-1),
+                            .default = .$wy))
+
   
   ## Filter by quarter -------------------------------------------------------
   if (quarter == "winter") {
@@ -66,7 +62,7 @@ quarter_rast <- function(var, quarter, method, startYear, endYear, pathIn, pathO
     ## create one rast based on method(mean/sum)
     quarterRast <- terra::app(stack, fun = method)
     ## specific rast name for easier extraction later
-    names(quarterRast) <- paste0(var, quarter_wy$year[3], quarter)
+    names(quarterRast) <- paste0(var, quarter_wy$year[3], quarter, "_", method)
     
     ## export raster
     writeRaster(quarterRast,
