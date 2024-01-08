@@ -72,6 +72,26 @@ quarter_rast(var="tmx", quarter="summer", method = "mean",
 
 ```
 
+In addition to quarterly rasters by water year, we'll also need to make quarterly rasters averaged over the entire time period. 
+```{r}
+## Avg of winter precip (summed)
+pptFiles <- list.files(path=here("data/bcmv8/quarterly_avgs//"),
+                    pattern = paste0("ppt", ".+", "winter_sum"),
+                    full.names=TRUE)
+
+pptStack <- terra::rast(c(pptFiles))
+pptStack_avg <- terra::app(pptStack, fun = 'mean')
+writeRaster(pptStack_avg, here("data/bcmv8/monthly_avgs/ppt_winter_avg.tif"))
+
+## Avg of summer tmx
+tmxFiles <- list.files(path=here("data/bcmv8/quarterly_avgs//"),
+                       pattern = "tmx",
+                       full.names=TRUE)
+tmxStack <- terra::rast(c(tmxFiles))
+tmxStack_avg <- terra::app(pptStack, fun = "mean")
+writeRaster(tmxStack_avg, here("data/bcmv8/monthly_avgs/tmx_summer_avg.tif"))
+```
+
 
 ### Avg monthly rasters:
 
@@ -249,6 +269,7 @@ soil_rast <- function(soil_var) {
   rcl_resamp_r <- rcl_r %>% 
     project(y = crs(bcm_r), method="bilinear") %>% 
     resample(y = bcm_r, method="bilinear")
+  names(rcl_resamp_r) <- soil_var
   
   ## Save
   writeRaster(rcl_resamp_r, paste0(here("data/natsgo//NATSGO_"),
