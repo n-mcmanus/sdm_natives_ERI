@@ -13,7 +13,7 @@
 #' @return 12 TIFs with predicted habitat suitability by month
 
 
-pred_month <- function(model, pathIn, pathOut) {
+pred_month <- function(model, bcmPath, soilPath, pathOut) {
   
   ## List of months for map
   month <- c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
@@ -31,7 +31,7 @@ pred_month <- function(model, pathIn, pathOut) {
                                        full = TRUE))
       tdiff <- raster::raster(list.files(path = bcmPath,
                                          pattern = paste0("tdiff",".+", month),
-                                         full = TRUE))  %>% 
+                                         full = TRUE)) 
       tmxSummer <- raster::raster(paste0(bcmPath, "tmx_summer_avg.tif"))
       pptWinter <- raster::raster(paste0(bcmPath, "ppt_winter_avg.tif"))
       om <- raster::raster(list.files(path = soilPath,
