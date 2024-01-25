@@ -8,7 +8,7 @@
 #' convention of BCMv8 data. 
 #' 
 #' @author Nick McManus
-#' @param var character. Variable to be averaged (e.g. "ppt", "tmx", "tmn")
+#' @param var character. Variable to be averaged (e.g. "ppt", "tmx", "tmn") that's in BCM raster name
 #' @param quarter character. Which quarter to evaluate the variable over. `winter`: Dec, Jan, Feb. `summer`: Jun, Jul, Aug
 #' @param method character. `mean`: average the variables over the quarter. `sum`: find the cumulative value for the variable over the quarter.  
 #' @param startYear numeric or character. The first water year in data set
@@ -19,11 +19,14 @@
 
 
 quarter_rast <- function(var, quarter, method, startYear, endYear, pathIn, pathOut) {
-  ## Checks 
+  ## Checks ------------------------------------------------------------------
+  ### Must select winter or summer
   if (!(quarter %in% c("winter", "summer")))
     stop("Incorrect input for quarter. Please enter either 'summer' or 'winter'.")
+  ### Must choose mean or sum for method
   if (!(method %in% c("mean", "sum")))
     stop("Incorrect method provided. Please enter either 'mean' or 'sum'.")
+  ### Summing var other than ppt probably is wrong
   if (var != "ppt" & method == "sum")
     warning("You are finding cumulative data for a variable other than precipitation. Be advised.")
 
@@ -33,7 +36,7 @@ quarter_rast <- function(var, quarter, method, startYear, endYear, pathIn, pathO
                          month = c('oct', 'nov', 'dec', 'jan', 'feb', 'mar', 
                                    'apr', 'may', 'jun', 'jul', 'aug', 'sep'),
                          wy = rep(startYear:endYear, each = 12)) %>% 
-    mutate(year = case_when(month %in% c('oct', 'nov', 'dec') ~(.$wy-1),
+    mutate(year = case_when(month %in% c('oct', 'nov', 'dec') ~ (.$wy - 1),
                             .default = .$wy))
 
   
