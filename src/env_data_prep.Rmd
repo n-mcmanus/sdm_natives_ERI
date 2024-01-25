@@ -18,14 +18,13 @@ library(FedData)      ## Downloading SSURGO & NLCD data
 ```
 
 
-This script is used for generating and prepping environmental data to be used in the SDM script.
+This script generates and preps the environmental data used in species distribution modeling. Outputs are read in for extraction in the `kern_sdm.Rmd` 
 
 
 # BCMv8 Data
 
 ### Convert ASC to TIF
-
-Publicly available BCMv8 files are in .asc format. ASCII files have associated coordinates but usually do not have an explicitly defined CRS when read in as a raster. Because the SDM will be run in a samples with data (SWD) format, .asc files are not necessary to run MaxEnt. Additionally, .tif have smaller file sizes than .asc, so conversion saves on data storage. The `asc_to_tif()` function converts an entire directory of .asc files to .tif files with appropriate CR. BCM data uses CA Albers NAD83 (EPSG:3310), so this is the default for the function.
+Publicly available BCMv8 files are in .asc format. ASCII files have associated coordinates but usually do not have an explicitly defined CRS when read in as a raster. Because the SDM will be run in a samples with data (SWD) format, .asc files are not necessary to run MaxEnt. Additionally, .tif have smaller file sizes than .asc, so conversion saves on data storage. The `asc_to_tif()` function converts an entire directory of .asc files to .tif with an inherent CRS. BCM data uses CA Albers NAD83 (EPSG:3310), so this is the default for the function.
 
 BCMv8 data can be directly downloaded from USGS at:
 https://www.sciencebase.gov/catalog/item/5f29c62d82cef313ed9edb39
@@ -42,10 +41,10 @@ asc_to_tif(filepath, remove = TRUE)
 ```
 
 
-
 ### Quarterly rasters
 
-Using the `quarter_rast()` function, we'll generate rasters of either mean or cumulative values across the summer (Jun-Aug) or winter (Dec-Feb) quarter for each water year. These will then be used as additional environmental variables for extraction. 
+#### Avg by water year
+Using the `quarter_rast()` function, we'll generate rasters of either mean or cumulative values across the summer (Jun-Aug) or winter (Dec-Feb) quarter for each water year. These will then be used as additional environmental variables for modelings. 
 ```{r}
 ## Read in fxn
 source(here("R/quarterly_rast.R"))
@@ -57,10 +56,6 @@ startYear = 2000
 endYear = 2022
 
 ## Run for winter ppt
-quarter_rast(var="ppt", quarter="winter", method="mean",
-            startYear, endYear,
-            pathIn, pathOut)
-
 quarter_rast(var="ppt", quarter="winter", method="sum",
             startYear, endYear,
             pathIn, pathOut)
@@ -72,21 +67,35 @@ quarter_rast(var="tmx", quarter="summer", method = "mean",
 
 ```
 
-In addition to quarterly rasters by water year, we'll also need to make quarterly rasters averaged over the entire time period. 
+#### Avg for time period
+In addition to quarterly rasters by water year, we'll also need to make quarterly rasters averaged over the entire time period. These won't be used for generating the models, but for predicting habitat suitability with the model.  
 ```{r}
-## Avg of winter precip (summed)
-pptFiles <- list.files(path=here("data/bcmv8/quarterly_avgs//"),
-                    pattern = paste0("ppt", ".+", "winter_sum"),
-                    full.names=TRUE)
+## Avg of winter precip ----------------------------------------------------
+pptFiles <- list.files(
+  ## read in the qtr avgs created in previous code chunk
+  path = here("data/bcmv8/quarterly_avgs//"),
+  ## only select winter ppt
+  pattern = paste0("ppt", ".+", "winter_sum"),
+  full.names = TRUE
+)
 
+## read in files as raster "stack"
 pptStack <- terra::rast(c(pptFiles))
+## find mean of all rasts
 pptStack_avg <- terra::app(pptStack, fun = 'mean')
+## export mean rast
 writeRaster(pptStack_avg, here("data/bcmv8/monthly_avgs/ppt_winter_avg.tif"))
 
-## Avg of summer tmx
-tmxFiles <- list.files(path=here("data/bcmv8/quarterly_avgs//"),
-                       pattern = "tmx",
-                       full.names=TRUE)
+
+## Avg of summer tmx --------------------------------------------------------
+tmxFiles <- list.files(
+  path = here("data/bcmv8/quarterly_avgs//"),
+  ## only select tmx files
+  pattern = "tmx",
+  full.names = TRUE
+)
+
+## read in as stack, find mean, then export
 tmxStack <- terra::rast(c(tmxFiles))
 tmxStack_avg <- terra::app(pptStack, fun = "mean")
 writeRaster(tmxStack_avg, here("data/bcmv8/monthly_avgs/tmx_summer_avg.tif"))
@@ -94,7 +103,6 @@ writeRaster(tmxStack_avg, here("data/bcmv8/monthly_avgs/tmx_summer_avg.tif"))
 
 
 ### Avg monthly rasters:
-
 To generate distribution probabilities by month, we'll also need to average monthly data over the entire time period (2000-2022 wy). First, we'll find the averages for the base BCM variables. Then, we'll have to use a slightly different function to find averaged temperature difference (tmax-tmin). 
 
 Averages of base BCM variables:
@@ -130,16 +138,16 @@ purrr::pmap(.l=vars, .f=var_avg, pathIn, pathOut, .progress = TRUE)
 Average of tdiff:
 ```{r}
 vars <- data.frame(month = c('oct', 'nov', 'dec', 'jan', 'feb', 'mar', 
-                              'apr', 'may', 'jun', 'jul', 'aug', 'sep'))
+                             'apr', 'may', 'jun', 'jul', 'aug', 'sep'))
 
 tdiff_avg <- function(month, pathIn, pathOut) {
   ## stack all tmx and tmn by month
   tmx.list <- list.files(path = pathIn,
-                    pattern = paste0("tmx", ".+", month),
-                    full.names = TRUE)
+                         pattern = paste0("tmx", ".+", month),
+                         full.names = TRUE)
   tmn.list <- list.files(path = pathIn,
-                    pattern = paste0("tmn", ".+", month),
-                    full.names = TRUE)
+                         pattern = paste0("tmn", ".+", month),
+                         full.names = TRUE)
   
   tmx <- terra::rast(c(tmx.list))
   tmn <- terra::rast(c(tmn.list))
@@ -159,6 +167,52 @@ pathIn = here("data/bcmv8/2000_2022//")
 pathOut = here("data/bcmv8/monthly_avgs//")
 purrr::pmap(.l=vars, .f=tdiff_avg, pathIn, pathOut, .progress = TRUE)
 ```
+
+
+
+### Future BCM data
+
+Finally, to generate future species distribution probability maps, we'll have to wrangle projected environmental data. 
+
+Testing out how to read in and work with the netCDF files of projected BCM data. 
+
+```{r}
+library(ncdf4)
+
+## Read in w/modular format for looping --------------------
+ncpath <- here("data/bcmv8/MIROC//")
+ncname <- "MIROC5_rcp26_Monthly_tmx"  
+ncfname <- paste0(ncpath, ncname, ".nc")
+
+nc <- nc_open(ncfname)
+
+## Get lon, lat, and time from file --------------------
+lon <- ncvar_get(nc, "x")
+nlon <- dim(lon) ##verify number of values
+
+lat <- ncvar_get(nc, "y", verbose = F)
+nlat <- dim(lat)
+
+time <- ncvar_get(nc, "time")
+head(time)
+# [1]   0  31  61  92 123 151
+## Looks like "monthly" data points, but we can
+## double-check time units and number of time steps
+
+tunits <- ncatt_get(nc,"time","units")
+# tunits
+# [1] "days since 2006-10-01"
+nt <- dim(time)
+# nt
+# [1] 1116
+## Confirmed unit of days, so with 1116 steps, each step a month,
+## and start date of 2006, we can confirm it goes to 2099
+
+## Get var of interest (monthly tmax)
+tmx <- ncvar_get(nc, "MIROC5_rcp26_Monthly_tmx")
+# Error: cannot allocate vector of size 64.9 Gb
+```
+
 
 
 
@@ -193,43 +247,34 @@ mapunit = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"),
 ## Read in fxn
 source(here('R/natsgo.R'))
 
-natsgo_avg(horizon, component, mapunit, 
+##quick test for incorporating taxon
+##change fxn back later to automatically save 
+##once decided on taxon methodology
+test <- natsgo_avg(horizon, component, mapunit, 
            depth = 200, pathOut = here("data//"))
-
+write_csv(test, here("data/natsgo/alltax_200.csv"))
 ```
 
 Briefly exploring breakdown of component-level soil taxonomy 
 ```{r, eval=FALSE}
-taxon_counts <- component %>% 
-  mutate(compkind = as.factor(compkind)) %>% 
-  filter(majcompflag == "Yes") %>% 
-  group_by(compkind) %>% 
-  summarize(n = length(compkind))
-
-## How many components for each series?
-series_counts <- component %>% 
-  mutate(compname = as.factor(compname)) %>% 
-  filter(compkind == "Series") %>% 
-  filter(majcompflag == "Yes") %>% 
-  group_by(compname) %>% 
-  summarize(n = length(compname))
-
-# ## Quick check on number of unique values to
-# ## anticipate joining situation
-# length(unique(component$cokey))
-# [1] 93614
-# length(unique(chorizon$cokey))
-# [1] 43989
-# ## Quite a few components w/o horizon level data
-# length(unique(component$mukey))
-# [1] 19258
-# length(unique(mapunit$mukey))
-# [1] 19258
-# ## Matching number of mapunits (expected)
+# taxon_counts <- component %>% 
+#   mutate(compkind = as.factor(compkind)) %>% 
+#   filter(majcompflag == "Yes") %>% 
+#   group_by(compkind) %>% 
+#   summarize(n = length(compkind))
+# 
+# ## How many components for each series?
+# series_counts <- component %>% 
+#   mutate(compname = as.factor(compname)) %>% 
+#   filter(compkind == "Series") %>% 
+#   filter(majcompflag == "Yes") %>% 
+#   group_by(compname) %>% 
+#   summarize(n = length(compname))
 ```
 
 
 ### Soil rasters
+
 To run the SDM for each month, need to have NATSGO soil data as rasters that stack with the monthly BCM data. Now that the soil data has been aggregated by mapunit, we'll reclassify the mapunit raster to generate one raster for each soil variable in the model (cec, ph, om, taxonomy).
 
 Raw gNATSGO raster is 10m resolution, which has been too small to reclassify on available servers. We'll first lower the resolution to 270m, to match BCM data:
@@ -244,14 +289,19 @@ writeRaster(mu270_r, here("data/natsgo/MapunitRaster_270m_CA_2023.tif"))
 Now we'll reclassify the mapunit raster to aggregated soil data and match extent of BCM rasters:
 ```{r}
 ## Read in soil data and rasters
-soil_df <- read_csv(here("data/natsgo/horizon200_CA.csv"))
-mu270_r <- rast(here("data/natsgo/MapunitRaster_270m_CA_2023.tif"))
+# soil_df <- read_csv(here("data/natsgo/horizon200_CA.csv"))
+mu270_r <- rast(here("data/natsgo/rasters/MapunitRaster_270m_CA_2023.tif"))
 bcm_r<- rast(here("data/bcmv8/monthly_avgs/tmx_jan_avg.tif")) #sample bcm raster
-# soil_names = read_csv(here("data/natsgo/filterfirst_series_200.csv")) %>% 
-# mutate(compname_fct = as.factor(compname))  %>% 
-#   mutate(compname_fct = unclass(compname_fct)) %>% 
-#   mutate(compname_fct = as.numeric(compname_fct))
-#   mutate(compname_fct = as.factor(compname_fct))
+
+# ##testing soil taxonomy
+soil_df <- read_csv(here("data/natsgo/alltax_200.csv")) %>%
+mutate(compname_fct = as.factor(compname))  %>%
+  mutate(compname_fct = unclass(compname_fct)) %>%
+  mutate(compname_fct = as.numeric(compname_fct)) %>%
+  ## To select for only series data
+  ## ensures you keep mukeys that aren't at series level
+  mutate(compname_fct = case_when(!compkind %in% c("Taxon above family") ~ compname_fct,
+         .default = NA))
 
 
 ### Fxn to reclassify for all soil variables
@@ -267,20 +317,23 @@ soil_rast <- function(soil_var) {
   
   ## match crs & extent for stacking
   rcl_resamp_r <- rcl_r %>% 
-    project(y = crs(bcm_r), method="bilinear") %>% 
-    resample(y = bcm_r, method="bilinear")
+    ## change from 'bilinear' to 'near' for categorical taxon
+    project(y = crs(bcm_r), method="near") %>% 
+    resample(y = bcm_r, method="near")
   names(rcl_resamp_r) <- soil_var
   
   ## Save
-  writeRaster(rcl_resamp_r, paste0(here("data/natsgo//NATSGO_"),
-                                   soil_var, "_270m_CA_2023.tif"),
+  writeRaster(rcl_resamp_r, paste0(here("data/natsgo/rasters/NATSGO_"),
+                                   ##temp change for taxon test
+                                   "lowtax_270m_CA_2023.tif"),
+                                   # soil_var, "_270m_CA_2023.tif"),
               overwrite = TRUE)
 }
 
 ## variable names must match columns in `soil_df`
 soil_var = c("cec", "ph", "om")
-
 purrr::map(soil_var, soil_rast, .progress = TRUE)
+soil_rast(soil_var = "compname_fct")
 ```
 
 
@@ -301,21 +354,17 @@ test <- arc.raster(arc.open(here("data/ssurgo/gNATSGO_CA/gNATSGO_CA.gdb")), "Map
 
 # gSSURGO Data
 
-Info and link to site go here.
-https://websoilsurvey.nrcs.usda.gov/app/WebSoilSurvey.aspx
-
-Directly downloading and extracting the most recent (2019) SSURGO data with the `FedData` package. 
-
 Soil data from SSURGO is broken down into four different levels: soil survey areas, map units, components, and horizons. Data is downloaded by soil survey area, which is subdivided into map units. Spatial data (polygons) are provided only for map units. Each map unit contains one or more components, which helps break down map units by further soil type. Map unit and component data are related using a map unit key (mukey). Soil components are vertically broken up into horizons, representing a different strata. Horizon-level data contains the information we're interested for modeling species distribution, such as pH, percent organic matter, and cation exchange capacity. Horizon and component data are related using a component key (cokey). 
 
 Because some components have many horizons, and some map units have several components, relating horizon-level data to map units for spatial extraction requires turning 1:many joins into 1:1 joins. This is done by selecting a cut-off soil depth, then finding a weighted average of horizon-level data based on the thickness of each horizon. Once this horizon data is joined to a component, we can use the percent area of a component w/in a map unit to find the weighted average again. 
 
-**NOTE** `get_ssurgo()` supposedly can use spatial templates to download/crop/merge data for a given area, but this doesn't work with rasters or vectors of CA because the area is too big. I also tried reading in all soil areas at once, but it timed out before it could merge them all as one geopackage. The work-around is to download/extract each survey area in CA separately, then read in data from respective geopackages and merge. Not as nice as calling directly from a `get_ssurgo()` output (which I left commented out for future reference).
+**NOTE** `get_ssurgo()` supposedly can use spatial templates to download/crop/merge data for a given area, but this doesn't work with rasters or vectors of CA because the area is too big. I also tried reading in all soil areas at once, but it timed out before it could merge them all as one geopackage. The work-around is to download/extract each survey area in CA separately, then read in data from respective geopackages and merge. Not as nice as calling directly from a `get_ssurgo()` output.
 
 The following soil survey areas were omitted for lacking horizon-level data: CA663, CA704, CA793, CA804, CA806. 
 
 ### Download/merge data
-First we'll download and extract all the soil data for CA locally as geopackages. Then we'll read in horizon, component, and map unit data for each soil area and merge them. 
+
+First we'll download and extract all the soil data for CA locally as geopackages using the `FedData` package. Then we'll read in horizon, component, and map unit data for each soil area and merge them. 
 
 Reading in data from SSURGO database:
 ```{r}
@@ -349,8 +398,8 @@ CA_df = data.frame(template = CA_surveyAreas,
 
 ## Download/extract each survey area
 ## Only needs to be run once
-## TAKES A LONG TIME! Commented out to be safe
-# pmap(CA_df, get_ssurgo)
+## TAKES A LONG TIME!
+pmap(CA_df, get_ssurgo)
 
 
 ## Read in/merge horizon data
@@ -388,35 +437,30 @@ for (i in 1:nrow(CA_df)) {
 
 ```
 
+
+**NOTE:** Rather than using `FedData`, a .gdb for the state of CA can be downloaded directly from https://nrcs.app.box.com/v/soils/folder/17971946225
+You can use the following code to read in the data instead. The rest of the workflow should work the same, but note that variable naming convention switches (e.g. "om.r" to "om_r"). Including this codechunk just for reference. 
 ```{r}
-# ## **FOR REFERENCE**: If using fewer survey areas,
-# ## use this code to automatically read in/merge dataset.
-# ## Then filter/merge using same code below
-# ssurgo = get_ssurgo(template = CA_surveyAreas, label = "CA")
-# chorizon = ssurgo$tabular$chorizon
-# component = ssurgo$tabular$component
-# mapunit = ssurgo$tabular$mapunit
-# ssurgo_sf = ssurgo$spatial
+## Check lyrs in .gdb
+# lyrs = st_layers(here("data/ssurgo/gSSURGO_CA.gdb"))
+
+## Read in tabular data
+horizon = st_read(here("data/ssurgo/gSSURGO_CA.gdb"),
+                  layer = "chorizon")
+component = st_read(here("data/ssurgo/gSSURGO_CA.gdb"),
+                  layer = "component")
+mapunit = st_read(here("data/ssurgo/gSSURGO_CA.gdb"),
+                  layer = "mapunit")
+
+## Read in spatial data for joining
+mapunit_vect = st_read(here("data/ssurgo/gSSURGO_CA.gdb"),
+                  layer = "MUPOLYGON")
 ```
 
 
 ### Filter and join
 Perform series of averages and joins to assign horizon data to each map unit.
 ```{r}
-# ## Quick check on number of unique values to
-# ## anticipate joining situation
-# length(unique(component$cokey))
-# [1] 91837
-# length(unique(chorizon$cokey))
-# [1] 42218
-# ## Quite a few components w/o horizon level data
-# length(unique(component$mukey))
-# [1] 19126
-# length(unique(mapunit$mukey))
-# [1] 19126
-# ## Matching number of mapunits (expected)
-
-
 ## Remove variables with all NAs
 not_all_na <- function(x) any(!is.na(x)) #for data cleaning
 
@@ -432,18 +476,8 @@ chorizon200 = chorizon %>%
   filter(hzdept.r < 200) %>% 
   droplevels()
 
-## How many components still have more than 1 horizon
-## after filtering in last step?
-nrow(
-  chorizon200 %>% 
-    group_by(cokey) %>% 
-    summarize(count = n()) %>% 
-    filter(count > 1)
-  )
-# [1] 31000
-
-## To deal w/this, we'll summarize var of interest
-## w/weighted mean of horizon thickness (above 30cm cutoff)
+## Summarize var of interest
+## w/weighted mean of horizon thickness (above 200cm cutoff)
 chorizon200_wmean = chorizon200 %>% 
   ## find thickness of each horizon
   mutate(thick = ifelse(hzdepb.r > 200, 200 - hzdept.r,
