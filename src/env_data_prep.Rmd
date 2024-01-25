@@ -218,137 +218,123 @@ tmx <- ncvar_get(nc, "MIROC5_rcp26_Monthly_tmx")
 
 
 # gNATSGO Data
-Due to the large number of species occurrences within NA pockets of California gSSURGO data, we'll be using the gridded National Soil Survey Geographic Database (gNATSGO) for extracting soil data. NATSGO data combines SSURGO and STATSGO, prioritizing SSURGO data where available and filling in missing areas with lower-level STATSGO data. gNATSGO also differs from gSSURGO in that mapunit level data is provided as a 10m resolution raster rather than a vector. Due to the resolution of other environmental data and the coordinate precision with which species occurrence data is filtered, this raster should be satisfactory for extracting soil characteristics. 
 
+*Why gNATSGO?:*
+Due to the large number of species occurrences within NA pockets of California gSSURGO data, we'll be using the gridded National Soil Survey Geographic Database (gNATSGO) for extracting soil data. NATSGO data combines SSURGO and STATSGO, prioritizing SSURGO data where available and filling in missing areas with lower-level STATSGO data. gNATSGO also differs from gSSURGO in that mapunit level data is provided as a 10m resolution raster rather than a vector. To match the resolution of other environmental data and the coordinate precision with which species occurrence data is filtered, this raster will be aggregated to 270m resolution. 
+
+*Note on methods:*
+gNATSGO geodatabases contain both tabular and spatial data. Spatial attributes are only provided for mapunit level data, while tabular data is provided for mapunits, components, and horizons. Each mapunit contains one or more soil components, which in turn are vertically divided into soil horizons. Horizon-level data contains most of the soil characteristics we're interested in for modeling species distribution, such as pH, percent organic matter, and cation exchange capacity. In order to spatialize horizon-level data, we'll need to aggregate soil data and perform a series of joins. This is done by selecting a cut-off soil depth, then finding a weighted average of horizon-level data based on the thickness of each horizon. Once this horizon data is joined to a component, we can use the percent area of a component w/in a map unit to find the weighted average again. 
+
+While tabular data from .gdb can be read into R, I have not yet found a method for directly reading in the mapunit raster. Currently, this raster is obtained by opening the .gdb in ArcGIS Pro and exporting the raster as a .tif file.
+
+*Where to access:*
 gNATSGO data by state can be directly downloaded as an ESRI geodatabase (.gdb) from the USDA's Natural Resources Conservation Service (NRCS):
 https://nrcs.app.box.com/v/soils/folder/191785692827
 
 More information about the database can be found on the NRCS' website:
 https://www.nrcs.usda.gov/resources/data-and-reports/gridded-national-soil-survey-geographic-database-gnatsgo#download
 
-**NOTE:** While tabular data from .gdb can be read into R, I have not yet found a method for directly reading in the mapunit raster. Currently, this raster is obtained by opening the .gdb in ArcGIS Pro and exporting the raster as a .tif file.
 
-The code and workflow for preparing gSSURGO data is still included in the following section for future reference. The workflow largely remains the same for both data sources.
+### Aggregate soil data
 
-
-### Soil aggregation
-
-Here we'll read in data from the locally saved gNATSGO .gdb. These data are inputs to the `natsgo_avg()` function, which aggregates horizon-level soil properties to mapunits.
+Here we'll read in data from the locally saved gNATSGO .gdb. These data are inputs to the `natsgo_agg()` function, which outputs a .csv of aggregated horizon-level soil properties by mapunit.
 ```{r}
-## Read in using sf package to specify file in database
+## database location
+gdb = here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb")
+
+## Check the layers in the .gdb
+# st_layers(gdb)
+
+## Read in soil data using sf package to specify layer in database
 ## Comes in as df
-horizon = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"), 
-                   layer = "chorizon")
-component = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"), 
-                    layer = "component")
-mapunit = st_read(here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb"), 
-                  layer = "mapunit")
+horizon = st_read(gdb, layer = "chorizon")
+component = st_read(gdb, layer = "component")
+mapunit = st_read(gdb, layer = "mapunit")
 
-## Read in fxn
-source(here('R/natsgo.R'))
+## Read in and run fxn
+source(here('R/natsgo_agg.R'))
 
-##quick test for incorporating taxon
-##change fxn back later to automatically save 
-##once decided on taxon methodology
-test <- natsgo_avg(horizon, component, mapunit, 
-           depth = 200, pathOut = here("data//"))
-write_csv(test, here("data/natsgo/alltax_200.csv"))
-```
-
-Briefly exploring breakdown of component-level soil taxonomy 
-```{r, eval=FALSE}
-# taxon_counts <- component %>% 
-#   mutate(compkind = as.factor(compkind)) %>% 
-#   filter(majcompflag == "Yes") %>% 
-#   group_by(compkind) %>% 
-#   summarize(n = length(compkind))
-# 
-# ## How many components for each series?
-# series_counts <- component %>% 
-#   mutate(compname = as.factor(compname)) %>% 
-#   filter(compkind == "Series") %>% 
-#   filter(majcompflag == "Yes") %>% 
-#   group_by(compname) %>% 
-#   summarize(n = length(compname))
+natsgo_agg(horizon, component, mapunit, 
+           depth = 200, pathOut = here("data/natsgo//"))
 ```
 
 
-### Soil rasters
+### Rasterize soil data
 
-To run the SDM for each month, need to have NATSGO soil data as rasters that stack with the monthly BCM data. Now that the soil data has been aggregated by mapunit, we'll reclassify the mapunit raster to generate one raster for each soil variable in the model (cec, ph, om, taxonomy).
+To eventually run the monthly and future distribution probabilities, we need to have NATSGO soil data as rasters that can stack with the monthly BCM data. Now that the tabular soil data has been aggregated by mapunit, we'll reclassify the mapunit raster to generate one raster for each soil variable in the model (cec, ph, om, taxonomy).
 
-Raw gNATSGO raster is 10m resolution, which has been too small to reclassify on available servers. We'll first lower the resolution to 270m, to match BCM data:
+The raw gNATSGO raster is 10m resolution, so we'll first lower the resolution to 270m to match BCM data:
 ```{r}
 ## Read in soil data and raster
-mu_r <- rast(here("data/natsgo/MapunitRaster_10m_CA_2023.tif"))
+mu_r <- rast(here("data/natsgo/rasters/MapunitRaster_10m_CA_2023.tif"))
+
 ## Change resolution to 270m
-mu270_r <- aggregate(mu_r, fact=27, fun="modal")
-writeRaster(mu270_r, here("data/natsgo/MapunitRaster_270m_CA_2023.tif"))
+mu270_r <- aggregate(mu_r, fact=27, 
+                     ## mapunits are categorical
+                     fun="modal")
+## Save
+writeRaster(mu270_r, here("data/natsgo/rasters/MapunitRaster_270m_CA_2023.tif"))
 ```
 
-Now we'll reclassify the mapunit raster to aggregated soil data and match extent of BCM rasters:
+Now we'll create a new raster for each soil variable by reclassifying the mapunit raster and matching the extent of BCM data:
 ```{r}
-## Read in soil data and rasters
-# soil_df <- read_csv(here("data/natsgo/horizon200_CA.csv"))
+## Read in data ----------------------------------------------------------
+## mapunit raster
 mu270_r <- rast(here("data/natsgo/rasters/MapunitRaster_270m_CA_2023.tif"))
-bcm_r<- rast(here("data/bcmv8/monthly_avgs/tmx_jan_avg.tif")) #sample bcm raster
+## sample bcm raster
+bcm_r<- rast(here("data/bcmv8/monthly_avgs/tmx_jan_avg.tif"))
+## soil data
+soil_df <- read_csv(here("data/natsgo/horizon_200cm_CA.csv")) %>% 
+  ## turn taxon into a factor, then reclass as numeric
+  ## must be in numeric form to reclassify raster
+  mutate(taxon = as.factor(compname)) %>% 
+  mutate(taxon = unclass(taxon)) %>%
+  mutate(taxon = as.numeric(taxon))
 
-# ##testing soil taxonomy
-soil_df <- read_csv(here("data/natsgo/alltax_200.csv")) %>%
-mutate(compname_fct = as.factor(compname))  %>%
-  mutate(compname_fct = unclass(compname_fct)) %>%
-  mutate(compname_fct = as.numeric(compname_fct)) %>%
-  ## To select for only series data
-  ## ensures you keep mukeys that aren't at series level
-  mutate(compname_fct = case_when(!compkind %in% c("Taxon above family") ~ compname_fct,
-         .default = NA))
-
-
-### Fxn to reclassify for all soil variables
-### Make output rasters match ext of BCM to stack later
-soil_rast <- function(soil_var) {
+## Create fxn to reclassify and match BCM raster extent -------------------
+soil_rast <- function(var, type) {
   ## Select one variable at a time
   rcl <- soil_df %>% 
-    dplyr::select(mukey, soil_var) %>% 
+    dplyr::select(mukey, var) %>% 
     rbind(c(0, NA)) #make outside areas NA
   
   ## reclassify
   rcl_r <- classify(mu270_r, rcl)
   
-  ## match crs & extent for stacking
-  rcl_resamp_r <- rcl_r %>% 
-    ## change from 'bilinear' to 'near' for categorical taxon
-    project(y = crs(bcm_r), method="near") %>% 
-    resample(y = bcm_r, method="near")
-  names(rcl_resamp_r) <- soil_var
+  ## if continuous variable, resamp w/bilinear method
+  if (type == "cont") {
+    rcl_resamp_r <- rcl_r %>%
+      project(y = crs(bcm_r), method = "bilinear") %>%
+      resample(y = bcm_r, method = "bilinear")
+  ## if categorical, use near method
+  } else {
+    rcl_resamp_r <- rcl_r %>%
+      project(y = crs(bcm_r), method = "near") %>%
+      resample(y = bcm_r, method = "near")
+  }
+  
+  ## proper raster file name
+  names(rcl_resamp_r) <- var
   
   ## Save
-  writeRaster(rcl_resamp_r, paste0(here("data/natsgo/rasters/NATSGO_"),
-                                   ##temp change for taxon test
-                                   "lowtax_270m_CA_2023.tif"),
-                                   # soil_var, "_270m_CA_2023.tif"),
+  writeRaster(rcl_resamp_r,
+              paste0(
+                here("data/natsgo/rasters/natsgo_"),
+                var,
+                "_270m_CA_2023.tif"
+              ),
               overwrite = TRUE)
-}
+} ##End fxn
 
-## variable names must match columns in `soil_df`
-soil_var = c("cec", "ph", "om")
-purrr::map(soil_var, soil_rast, .progress = TRUE)
-soil_rast(soil_var = "compname_fct")
-```
+## Iterate fxn over all soil variables ------------------------------------
+## var names must match columns in `soil_df`
+soil_vars = data.frame(var = c("cec", "ph", "om", "taxon"),
+                       type = c("cont", "cont", "cont", "cat"))
 
-
-### ArcGIS test code:
-Trying `arcgisbinding` package to read in raster but not working. Maybe look into this more later, but for now just manually read in .gdb and exported raster from ArcGIS.
-```{r}
-## Install and load pkg
-install.packages("arcgisbinding", repos="https://r.esri.com", type="win.binary")
-library(arcgisbinding)
-## Need to run first to check ESRI license on computer
-arc.check_product()
-
-raster <- arc.open(here("data/ssurgo/gNATSGO_CA/gNATSGO_CA/MapunitRaster_10m_CA_2023.tif"))
-
-test <- arc.raster(arc.open(here("data/ssurgo/gNATSGO_CA/gNATSGO_CA.gdb")), "MapunitRaster_10m_CA_2023.tif")
+## run w/pmap
+purrr::pmap(.l = soil_vars, 
+            .f = soil_rast, 
+            .progress = TRUE)
 ```
 
 
