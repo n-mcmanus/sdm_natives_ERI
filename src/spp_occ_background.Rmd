@@ -24,7 +24,7 @@ This script filters and creates both the species occurrence and background point
 # Occurrence Data
 
 ## Download/import
-This first section will read in, filter, and export species occurrence data from three different sources: GBIF, VegBank, and CalFlora. Both VegBank and CalFlora data are downloaded directly from their websites. GBIF data is imported and filtered using the `rgbif` and `CoordinateCleaner` packages, respectively. 
+This first section will read in, filter, and export species occurrence data from GBIF and CalFlora.
 
 
 ### CalFlora
@@ -33,7 +33,7 @@ https://www.calflora.org/entry/observ.html
 
 A single CSV was downloaded for each species. We'll read them all in as one dataframe to more easily filter the data. 
 
-*NOTE:* Creating a "low" and "high" filtered version of the data to see how much of a difference strictness over data sources plays. 
+
 ```{r}
 path = here("data/occ/calflora//")
 
@@ -81,51 +81,6 @@ for (i in 1:length(names)) {
 
 
 
-### VegBank
-This data was downloaded directly from the VegBank website, found here: http://vegbank.org/vegbank/forms/plot-query.jsp. 
-
-Data for all plots of one spp were downloaded and zipped as a "batch". Information about the plots, contributors, and all the spp and % cover are written as different CSV files. 
-Spatial information on the plots is limited; only one coordinate (assuming the center) is given for each plot. Sometimes the size of the plot is provided in m^2, sometimes it's reported qualitatively (e.g. "small" or "large"), and sometimes there is no information. Because presence data will be thinned in the next step, we'll assign one observation point for a plot under 270m^2 in size, regardless of % coverage. For plots where area is not reported, we'll err on the side of caution and only include one point as well. For plots over 270m^2..... TBD. The observation coordinate assigned will be the one reported for the plot in the VegBank database.
-
-*NOTE:* we'll decide if this methodology should be changed later. 
-```{r}
-path = here("data/occ/vegbank//")
-
-names <- c(
-  "a_polycarpa",
-  "p_arborea",
-  "c_pungens",
-  "l_pentachaeta",
-  "p_ciliata",
-  "a_menziesii"
-  ## Not in vegbank
-  # "c_lasiophyllus"
-)
-
-## Loop to read in, filter, and export for each spp
-for (i in 1:length(names)) {
-  
-  ## Read in data
-  plotData <- read_csv(paste0(path, names[i], "_noFilter/plot_env.csv"))
-  
-  ## filter and keep coords
-  plotData_obs <- plotData %>% 
-    mutate(date = lubridate::ymd(obsstartdate_vb)) %>% 
-    filter(date >= "1999-10-01") %>% 
-    ## Filter for under 270. Won't do for now
-    # filter(area <= 270 | area == "null") %>% 
-    dplyr::select(observation_id, authorplotcode_vb, 
-                  project_id_name, date, latitude, longitude) %>% 
-    mutate(spp = names[i])
-  
-  ## export
-  write_csv(plotData_obs, paste0(path, names[i], "_vegbank.csv"))
-}
-
-
-```
-
-
 ### GBIF
 This script uses the `rgbif` package to directly download species occurrence data from GBIF. To use the `occ_download()` function, this requires setting your GBIF login details. Details on how to set this can be found at: 
 https://docs.ropensci.org/rgbif/articles/gbif_credentials.html
@@ -140,7 +95,6 @@ taxon_keys <- name_backbone_checklist(c(
   "Centromadia pungens",
   "Layia pentachaeta subsp. albida D.D.Keck", 
   "Phacelia ciliata Benth.",
-  ## spp that naturally colonized
   "Amsinckia menziesii (Lehm.) A.Nelson & J.F.Macbr.",
   "Caulanthus lasiophyllus (Hook. & Arn.) Payson"
 )) %>% 
@@ -172,10 +126,13 @@ for (i in 1:length(taxon_keys)) {
                          pred("country", "US"),
                          ## within CA
                          pred("stateProvince", "California"),
-                         ## uncertainty less than 5000m
-                         #pred_lt("coordinateUncertaintyInMeters",5000),
                          ## output as CSV
-                         format = "SIMPLE_CSV")
+                         format = "SIMPLE_CSV",
+                         ## enter your GBIF credentials below:
+                         # user = "username",
+                         # pwd = "password",
+                         # email = "email"
+                         )
   
   ### check on download status
   occ_download_wait(gbif_download)
@@ -272,25 +229,10 @@ for (i in 1:length(names)) {
              date = Date) %>% 
       mutate(source = "calflora")
   }
-
-  ## VegBank ------------------
-  if (length(list.files(path_vegbank, pattern = names[i])) == 0) {
-    vegbank = NULL
-  } else {
-    vegbank <- read_csv(paste0(path_vegbank, names[i], "_vegbank.csv")) %>% 
-      dplyr::select(c(observation_id, latitude, longitude, date)) %>% 
-      rename(id = observation_id, 
-             lat = latitude,
-             lon = longitude) %>% 
-      mutate(source = "vegbank") %>% 
-      ## check for incorred coord entries
-      filter(lon < 0,
-             lat > 0)
-  }
            
 
   ## Merge and thin -----------
-  combo <- rbind(gbif, calflora, vegbank) %>% 
+  combo <- rbind(gbif, calflora) %>% 
     mutate(year = lubridate::year(date),
            month = lubridate::month(date),
            .before = source)
@@ -383,28 +325,39 @@ ggplot() +
 Random background occurrence points will be generated using the `dismo` package and exported as a CSV file. Spatially, background points are generated within a 5km range of observed occurrences. Temporally, the relative number of background points per water year matches that of observations. A minimum number of 10,000 points are generated for each species; the exact number slightly varies to accommodate temporal distribution. 
 
 ```{r}
+## spp names
 names <- c(
+  # "a_polycarpa",
+  # "p_arborea",
+  "c_pungens",
   "l_pentachaeta",
   "p_ciliata",
-  "a_menziesii")
+  "a_menziesii",
+  "c_lasiophyllus"
+)
 
 ## Read in fxn
 source(here("R/generate_backOcc.R"))
 ## Fxn parameters
-raster = rast(here('data/bcmv8/2000_2022/aet2020dec.tif'))
+## test with series
+raster = rast(here("data/natsgo/rasters/natsgo_taxon_270m_CA_2023.tif"))
+# raster = rast(here('data/bcmv8/2000_2022/aet2020dec.tif'))
 buffer = 5000
 
 ## Generate backOccs for each spp in list
 purrr::map(.x=names, function(names) {
   ## read in spp occurrence points
   sppOcc = read_csv(paste0(here("data/occ/combined_spp_occ//"), 
-                           names, "_lowFilter.csv"))
+                           names, "_lowFilter.csv")) %>% 
+    ## test: remove vegbank
+    dplyr::filter(!source %in% "vegbank")
   print(paste0("Working on ", names))
   ## Generate pts
   backOcc_pts <- backOcc(sppOcc, raster=raster, buffer)
   ### export
-  write_csv(backOcc_pts, paste0(here("data/background/back_"), 
-                                names, "_lowfilter_5km.csv"))
+  write_csv(backOcc_pts, paste0(here("data/background/back_"),
+                                ## no veg 
+                                names, "_lowtax2_noVeg_5km.csv"))
 })
 
 ```
