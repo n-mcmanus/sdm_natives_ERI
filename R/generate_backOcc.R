@@ -27,16 +27,19 @@ backOcc <- function(sppOcc, raster, buffer, back_n = 10000,
     terra::buffer(., width = buffer)
   
   ## Keep only area of reference raster w/in sppZone
-  rast <- raster %>% 
+  raster_crop <- raster %>% 
+    ## match crs of raster to spp polygon
     terra::project(y=crs(sppZone)) %>% 
+    ## crop and mask to make all cells outside polygon NA
     terra::crop(y=sppZone, mask = TRUE)
-  ## Raster pkg format req for dismo pkg  
-  r <- raster::raster(rast)
+  ## Raster pkg format required for dismo 
+  r <- raster::raster(raster_crop)
   
   ## Find occ ratio to apply to bkg pts
   occ_count <- sppOcc %>% 
     ## only keep occs in 2000-2022 wy
     mutate(wy = lfstat::water_year(.$date, origin = 10),
+           ##convert factor to numeric
            wy = as.numeric(levels(wy))[wy]) %>% 
     dplyr::filter(wy >= 2000 & wy <= 2022) %>% 
     ## find counts and % counts for each water year
@@ -47,9 +50,9 @@ backOcc <- function(sppOcc, raster, buffer, back_n = 10000,
   ## list of water years
   w_years <- rep(2000:2022, each = 1)
   
-  ## Start df for loop ()
-  backOcc_total <- data.frame("x" = NA, "y" = NA, 
-                              "month"=NA, "year" = NA, "wy" = NA)
+  ## Start empty df for loop below
+  ## (will remove these NA values at end)
+  backOcc_total <- data.frame("x" = NA, "y" = NA, "month"=NA, "year" = NA, "wy" = NA)
   
   ## Progress bar (fxn can take long time to run)
   runLength <- length(w_years)
@@ -59,12 +62,13 @@ backOcc <- function(sppOcc, raster, buffer, back_n = 10000,
                        width = runLength,
                        char = "=")
   
-  ## Loop through every yr to generate bkg pts ----------------------------
+  ## Loop through every wy to generate bkg pts ----------------------------
   for (i in 1:length(w_years)) {
     occ_filt <- occ_count %>% 
       dplyr::filter(wy == w_years[i])
     
-    ## If occs in wy, then generate number bkg pts based on occ ratio
+    ## If there are occs in the wy, 
+    ## then generate number of bkg pts based on occ ratio
     if(nrow(occ_filt) != 0) {
       ## number pts to be generated rounded up to be equal per month
       roundUp <- function(x) {12*ceiling(x/12)}
@@ -76,8 +80,7 @@ backOcc <- function(sppOcc, raster, buffer, back_n = 10000,
         dismo::randomPoints(mask = r, 
                             n = n,  
                             prob = FALSE,
-                            ## ensures two points don't occur
-                            ## in same cell
+                            ## ensures bkg pt not in same cell as spp occ
                             p = backOcc_total,
                             excludep = TRUE)
         )
@@ -87,22 +90,24 @@ backOcc <- function(sppOcc, raster, buffer, back_n = 10000,
                                       each = (n/12)),
                           wy = w_years[i])
       backOcc_dates <- cbind(backOcc, dates) %>% 
-        ## want calendar year for later extraction
+        ## we want calendar yr for later env extraction
         mutate(year = case_when(month %in% c(10, 11, 12) ~(w_years[i]-1),
                                 .default = w_years[i]))
       
       ## Bind loop results to ongoing df
       backOcc_total <- rbind(backOcc_total, backOcc_dates)
     
-    ## if no occs in month, skip to next   
+    ## if no occs in a wy, skip to the next wy in list
     } else {
       next
-    }
+    }##End if/else
+    
+    ## update progress bar
     setTxtProgressBar(pb, i)
     
   }##End loop
   
-  ## Remove placeholder "NA" row
+  ## Remove original placeholder "NA" row
   backOcc_total <- backOcc_total[-1,] %>% 
     dplyr::select(!wy)
   return(backOcc_total)
