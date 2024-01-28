@@ -54,14 +54,6 @@ backOcc <- function(sppOcc, raster, buffer, back_n = 10000,
   ## (will remove these NA values at end)
   backOcc_total <- data.frame("x" = NA, "y" = NA, "month"=NA, "year" = NA, "wy" = NA)
   
-  ## Progress bar (fxn can take long time to run)
-  runLength <- length(w_years)
-  pb <- txtProgressBar(min = 0,
-                       max = runLength,
-                       style = 3,
-                       width = runLength,
-                       char = "=")
-  
   ## Loop through every wy to generate bkg pts ----------------------------
   for (i in 1:length(w_years)) {
     occ_filt <- occ_count %>% 
@@ -101,10 +93,7 @@ backOcc <- function(sppOcc, raster, buffer, back_n = 10000,
     } else {
       next
     }##End if/else
-    
-    ## update progress bar
-    setTxtProgressBar(pb, i)
-    
+
   }##End loop
   
   ## Remove original placeholder "NA" row
