@@ -12,12 +12,13 @@
 #' @param horizon dataframe of horizon-level gNATSGO data
 #' @param component dataframe of component-level gNATSGO data
 #' @param mapunit dataframe of mapunit-level gNATSGO data
+#' @param muagg dataframe of aggregated mapunit-level gNATSGO data
 #' @param depth numeric. Cutoff depth (cm) for averaging horizon data
 #' @param pathOut character. Directory file path where .csv will be written
 #' @return CSV with averaged and aggregated soil data (pH, %OM, CEC) and dominant soil taxonomy by mapunit
 
 
-natsgo_agg <- function(horizon, component, mapunit, depth, pathOut) {
+natsgo_agg <- function(horizon, component, mapunit, muagg, depth, pathOut) {
   
   ## Remove variables with all NAs
   not_all_na <- function(x) any(!is.na(x))
@@ -59,19 +60,27 @@ natsgo_agg <- function(horizon, component, mapunit, depth, pathOut) {
   ## join with horizon data
   component_horizon = left_join(component, horizon_wmean, by = "cokey")
   
-  ## get soil taxonomy
-  taxon = component_horizon %>% 
-    ## remove NAs
-    filter(!is.na(compkind)) %>% 
-    ## only keep dominant soil tax in a mapunit
-    group_by(mukey) %>% 
-    slice_max(comppct_r, n = 1, with_ties = FALSE) %>% 
-    dplyr::select(compname, compkind, mukey) %>% 
-    ## remove data if main component taxonomy is above family
-    filter(!compkind %in% c("Miscellaneous area", "Taxon above family")) 
+  
+  ## Leaving in the code for extracting dominant soil taxonomy
+  ## under family, if useful for future. Not currently used in SDM
+  # ## get soil taxonomy
+  # taxon = component_horizon %>% 
+  #   ## remove NAs
+  #   filter(!is.na(compkind)) %>% 
+  #   ## only keep dominant soil tax in a mapunit
+  #   group_by(mukey) %>% 
+  #   slice_max(comppct_r, n = 1, with_ties = FALSE) %>% 
+  #   dplyr::select(compname, compkind, mukey) %>% 
+  #   ## remove data if main component taxonomy is above family
+  #   filter(!compkind %in% c("Miscellaneous area", "Taxon above family")) 
   
   
   ## MAPUNIT DATA ------------------------------------------------
+  ## get drainage class from muagg
+  muagg <- muagg %>% 
+    dplyr::select(drclassdcd, mukey) %>% 
+    rename(drclass = drclassdcd)
+  
   ## Find weighted average of vars based on % component area in a mapunit
   full_soil = component_horizon %>%
     group_by(mukey) %>%
@@ -79,19 +88,19 @@ natsgo_agg <- function(horizon, component, mapunit, depth, pathOut) {
               cec = round(weighted.mean(cec, comppct_r, na.rm = TRUE),2),
               ph = round(weighted.mean(ph, comppct_r, na.rm = TRUE),2)
               ) %>% 
-    ## join w/taxonomy data
-    left_join(., taxon, by = "mukey") %>% 
+    # ## join w/taxonomy data
+    # left_join(., taxon, by = "mukey") %>% 
+    ## join w/drainage class
+    left_join(., muagg, by = "mukey") %>% 
     ## join w/mapunit data
     left_join(., mapunit, by = "mukey") %>%
     ## convert commas to _ in muname so it's csv compatible
     mutate(muname = gsub(", ", "_", muname)) %>%
     ## remove mapunit variables we don't care about
-    dplyr::select(!c(mukind:lkey)) %>%
-    ## convert mukey from dbl to char for spatial join step
-    mutate(mukey = as.character(mukey))
+    dplyr::select(!c(mukind:lkey))
   
   ## Save as CSV
   write_csv(full_soil,
-            paste0(pathOut, "horizon_", depth, "cm_CA.csv"))
+            paste0(pathOut,"horizon_", depth, "cm_CA.csv"))
   
 } ### end fxn
