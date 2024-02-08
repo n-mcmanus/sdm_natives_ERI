@@ -1,12 +1,18 @@
 ## Overview:
-This repository contains the script and data used for modeling the distribution for native plant species of interest within Kern County, CA. 
+This repository contains the script and functions  used for modeling the distribution for native plant species of interest within Kern County, CA. Due to size limitatoins, most data for this analysis is not hosted in the repo. not pushed to the repo. Short descriptions of the data used, how they were obtained, and links to hosted data (where applicable) are provided in the "Data" section.
 
-The analysis is divided between three different scripts:
-* `env_data_prep.Rmd` contains the code used to download and/or wrangle the environmental data used in the SDM.
-* `spp_occ_background.Rmd` is the script for downloading and preparing species occurrence data as well as generating background (pseudo-absence) data for the SDM.
-* `kern_sdm.Rmd` preps the data in a samples with data (SWD) format, then runs the SDMs for each species. 
+The analysis was divided between three different scripts:
+* `env_data_prep.Rmd` contains the code used to download and/or wrangle the environmental data used in the SDM (BCM and gNATSGO).
+* `spp_occ_background.Rmd` is the script for downloading and wrangling species occurrence data as well as generating background points (pseudo-absences) for each species. Environmental variables are extracted for occurrence and background points to prepare the data in samples with data (SWD) format for the SDM.
+* `kern_sdm.Rmd` evaluates the prepared data, then runs the SDMs for each species. Suitability probability distribution maps are also generated for each species by month.
 
 Note that all of these scripts call on functions located in the `R/` directory of this repository. 
+ * `asc_to_tif.R` converts BCMv8 data in .asc format to .tif
+ * `quarterly_rast.R` generates seasonal (winter or summer) rasters by water year from monthly BCMv8 data.
+ * `natsgo_agg.R` aggregates horizon-level gNATSGO soil data by map unit
+ * `env_extract.R` extracts environmental data by year, month, and grid location of species occurrence and background data
+ * `generate_backOcc.R` generates background points within a specified buffer of species occcurrences
+ * `pred_month.R` produces suitability probability distribution maps for each month based on a provided SDM
 
 ## Data:
 Due to size limitations, the raw data for this analysis is not hosted in the repository. Short descriptions of the data used, how they were obtained, and links to hosted data (where applicable) are provided below. 
