@@ -13,12 +13,15 @@ library(purrr)        ## run iterative fxns faster
 library(sf)           ## vector objects
 library(terra)        ## Better/faster GIS
 library(raster)       ## GIS format required by Dismo
+
+## Ended up not using these pkgs 
+## but may be useful in the future
+library(FedData)      ## Downloading SSURGO/NLCD data
 library(tigris)       ## CA boundary shpfile
-library(FedData)      ## Downloading SSURGO & NLCD data
 ```
 
 
-This script generates and preps the environmental data used in species distribution modeling. Outputs are read in for extraction in the `kern_sdm.Rmd` 
+This script generates and preps the environmental data used in species distribution modeling. Outputs are read in for extraction in the `spp_occ_background.Rmd` as well as generating suitability prediction maps in the `kern_sdm.Rmd` markdown.
 
 
 # BCMv8 Data
@@ -67,8 +70,8 @@ quarter_rast(var="tmx", quarter="summer", method = "mean",
 
 ```
 
-#### Avg for time period
-In addition to quarterly rasters by water year, we'll also need to make quarterly rasters averaged over the entire time period. These won't be used for generating the models, but for predicting habitat suitability with the model.  
+#### Avg for entire time period
+In addition to quarterly rasters by water year, we'll also need to make quarterly rasters averaged over the entire time period (2000-2022). These won't be used for generating the models, but for predicting habitat suitability with the model.  
 ```{r}
 ## Avg of winter precip ----------------------------------------------------
 pptFiles <- list.files(
@@ -108,7 +111,7 @@ To generate distribution probabilities by month, we'll also need to average mont
 Averages of base BCM variables:
 ```{r}
 ## df of variables to avg
-vars <- data.frame(variable = rep(c("aet", "ppt", "tmn", "tmx"), each = 12),
+vars <- data.frame(variable = rep(c("aet", "ppt", "tmn", "tmx", "cwd"), each = 12),
                    month = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
                              'jul', 'aug', 'sep', 'oct', 'nov', 'dec'))
 
@@ -239,7 +242,7 @@ https://www.nrcs.usda.gov/resources/data-and-reports/gridded-national-soil-surve
 
 Here we'll read in data from the locally saved gNATSGO .gdb. These data are inputs to the `natsgo_agg()` function, which outputs a .csv of aggregated horizon-level soil properties by mapunit.
 ```{r}
-## database location
+## database pathway
 gdb = here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb")
 
 ## Check the layers in the .gdb
@@ -250,18 +253,21 @@ gdb = here("data/natsgo/gNATSGO_CA/gNATSGO_CA.gdb")
 horizon = st_read(gdb, layer = "chorizon")
 component = st_read(gdb, layer = "component")
 mapunit = st_read(gdb, layer = "mapunit")
+## provides pre-aggregated data on drainage class,
+## but not for other soil properties of interest
+muagg = st_read(gdb, layer = "muaggatt")
 
 ## Read in and run fxn
 source(here('R/natsgo_agg.R'))
 
-natsgo_agg(horizon, component, mapunit, 
+natsgo_agg(horizon, component, mapunit, muagg,
            depth = 200, pathOut = here("data/natsgo//"))
 ```
 
 
 ### Rasterize soil data
 
-To eventually run the monthly and future distribution probabilities, we need to have NATSGO soil data as rasters that can stack with the monthly BCM data. Now that the tabular soil data has been aggregated by mapunit, we'll reclassify the mapunit raster to generate one raster for each soil variable in the model (cec, ph, om, taxonomy).
+To eventually run the monthly and future distribution probabilities, we need to have NATSGO soil data as rasters that can stack with the monthly BCM data. Now that the tabular soil data has been aggregated by mapunit, we'll reclassify the mapunit raster to generate one raster for each soil variable in the model (cec, ph, om, drainage class).
 
 The raw gNATSGO raster is 10m resolution, so we'll first lower the resolution to 270m to match BCM data:
 ```{r}
@@ -285,11 +291,18 @@ mu270_r <- rast(here("data/natsgo/rasters/MapunitRaster_270m_CA_2023.tif"))
 bcm_r<- rast(here("data/bcmv8/monthly_avgs/tmx_jan_avg.tif"))
 ## soil data
 soil_df <- read_csv(here("data/natsgo/horizon_200cm_CA.csv")) %>% 
-  ## turn taxon into a factor, then reclass as numeric
-  ## must be in numeric form to reclassify raster
-  mutate(taxon = as.factor(compname)) %>% 
-  mutate(taxon = unclass(taxon)) %>%
-  mutate(taxon = as.numeric(taxon))
+  ## turn drainage into factor, set levels
+  mutate(drclass = factor(drclass, 
+                             levels = c("Excessively drained",
+                                        "Somewhat excessively drained",
+                                        "Well drained",
+                                        "Moderately well drained",
+                                        "Somewhat poorly drained",
+                                        "Poorly drained",
+                                        "Very poorly drained"))) %>% 
+  ## then reclass as numeric
+  mutate(drclass = as.numeric(drclass))
+
 
 ## Create fxn to reclassify and match BCM raster extent -------------------
 soil_rast <- function(var, type) {
@@ -326,480 +339,14 @@ soil_rast <- function(var, type) {
               overwrite = TRUE)
 } ##End fxn
 
+soil_rast(var = "drclass", type = "cat")
+
 ## Iterate fxn over all soil variables ------------------------------------
 ## var names must match columns in `soil_df`
-soil_vars = data.frame(var = c("cec", "ph", "om", "taxon"),
+soil_vars = data.frame(var = c("cec", "ph", "om", "drclass"),
                        type = c("cont", "cont", "cont", "cat"))
-
 ## run w/pmap
 purrr::pmap(.l = soil_vars, 
             .f = soil_rast, 
             .progress = TRUE)
-```
-
-
-# gSSURGO Data
-
-Soil data from SSURGO is broken down into four different levels: soil survey areas, map units, components, and horizons. Data is downloaded by soil survey area, which is subdivided into map units. Spatial data (polygons) are provided only for map units. Each map unit contains one or more components, which helps break down map units by further soil type. Map unit and component data are related using a map unit key (mukey). Soil components are vertically broken up into horizons, representing a different strata. Horizon-level data contains the information we're interested for modeling species distribution, such as pH, percent organic matter, and cation exchange capacity. Horizon and component data are related using a component key (cokey). 
-
-Because some components have many horizons, and some map units have several components, relating horizon-level data to map units for spatial extraction requires turning 1:many joins into 1:1 joins. This is done by selecting a cut-off soil depth, then finding a weighted average of horizon-level data based on the thickness of each horizon. Once this horizon data is joined to a component, we can use the percent area of a component w/in a map unit to find the weighted average again. 
-
-**NOTE** `get_ssurgo()` supposedly can use spatial templates to download/crop/merge data for a given area, but this doesn't work with rasters or vectors of CA because the area is too big. I also tried reading in all soil areas at once, but it timed out before it could merge them all as one geopackage. The work-around is to download/extract each survey area in CA separately, then read in data from respective geopackages and merge. Not as nice as calling directly from a `get_ssurgo()` output.
-
-The following soil survey areas were omitted for lacking horizon-level data: CA663, CA704, CA793, CA804, CA806. 
-
-### Download/merge data
-
-First we'll download and extract all the soil data for CA locally as geopackages using the `FedData` package. Then we'll read in horizon, component, and map unit data for each soil area and merge them. 
-
-Reading in data from SSURGO database:
-```{r}
-## List of soil survey areas in CA (w/horizon data)
-CA_surveyAreas = c("AZ649", "AZ656", "CA011", "CA013", "CA021", "CA031", 
-                   "CA033", "CA041", "CA053", "CA055", "CA067", "CA069", 
-                   "CA077", "CA087", "CA095", "CA097", "CA101", "CA113", 
-                   "CA600", "CA601", "CA602", "CA603", "CA604", "CA605", 
-                   "CA606", "CA607", "CA608", "CA609", "CA610", "CA612",
-                   "CA614", "CA618", "CA619", "CA620", "CA624", "CA628", 
-                   "CA630", "CA632", "CA637", "CA638", "CA641", "CA642", 
-                   "CA644", "CA645", "CA646", "CA647", "CA648", "CA649", 
-                   "CA651", "CA653", "CA654", "CA659", "CA660", "CA664", 
-                   "CA665", "CA666", "CA667", "CA668", "CA669", "CA670",
-                   "CA671", "CA672", "CA673", "CA674", "CA675", "CA676",
-                   "CA677", "CA678", "CA679", "CA680", "CA681", "CA682", 
-                   "CA683", "CA684", "CA685", "CA686", "CA687", "CA688", 
-                   "CA689", "CA691", "CA692", "CA693", "CA694", "CA695",
-                   "CA696", "CA697", "CA698", "CA699", "CA701", "CA702", 
-                   "CA703", "CA707", "CA708", "CA709", "CA713", "CA719", 
-                   "CA724", "CA729", "CA731", "CA732", "CA740", "CA750",
-                   "CA760", "CA763", "CA772", "CA776", "CA777", "CA788", 
-                   "CA789", "CA790", "CA792", "CA794", "CA795", "CA796", 
-                   "CA802", "CA803", "CA805")
-
-## df w/get_ssurgo args for pmap
-CA_df = data.frame(template = CA_surveyAreas,
-                   label = CA_surveyAreas,
-                   raw.dir = here("data/ssurgo/raw"),
-                   extraction.dir = here("data/ssurgo/extracted"))
-
-## Download/extract each survey area
-## Only needs to be run once
-## TAKES A LONG TIME!
-pmap(CA_df, get_ssurgo)
-
-
-## Read in/merge horizon data
-chorizon = data.frame()
-for (i in 1:nrow(CA_df)) {
-  area = paste0(here("data/ssurgo/extracted//"), 
-                CA_df$template[i], 
-                "_ssurgo.gpkg")
-  
-  x <- st_read(area, layer = "chorizon")
-  chorizon = rbind(chorizon, x)
-}
-
-## Component data
-component = data.frame()
-for (i in 1:nrow(CA_df)) {
-  area = paste0(here("data/ssurgo/extracted//"), 
-                CA_df$template[i], 
-                "_ssurgo.gpkg")
-  
-  x <- st_read(area, layer = "component")
-  component = rbind(component, x)
-}
-
-## Mapunit data
-mapunit = data.frame()
-for (i in 1:nrow(CA_df)) {
-  area = paste0(here("data/ssurgo/extracted//"), 
-                CA_df$template[i], 
-                "_ssurgo.gpkg")
-  
-  x <- st_read(area, layer = "mapunit")
-  mapunit = rbind(mapunit, x)
-}
-
-```
-
-
-**NOTE:** Rather than using `FedData`, a .gdb for the state of CA can be downloaded directly from https://nrcs.app.box.com/v/soils/folder/17971946225
-You can use the following code to read in the data instead. The rest of the workflow should work the same, but note that variable naming convention switches (e.g. "om.r" to "om_r"). Including this codechunk just for reference. 
-```{r}
-## Check lyrs in .gdb
-# lyrs = st_layers(here("data/ssurgo/gSSURGO_CA.gdb"))
-
-## Read in tabular data
-horizon = st_read(here("data/ssurgo/gSSURGO_CA.gdb"),
-                  layer = "chorizon")
-component = st_read(here("data/ssurgo/gSSURGO_CA.gdb"),
-                  layer = "component")
-mapunit = st_read(here("data/ssurgo/gSSURGO_CA.gdb"),
-                  layer = "mapunit")
-
-## Read in spatial data for joining
-mapunit_vect = st_read(here("data/ssurgo/gSSURGO_CA.gdb"),
-                  layer = "MUPOLYGON")
-```
-
-
-### Filter and join
-Perform series of averages and joins to assign horizon data to each map unit.
-```{r}
-## Remove variables with all NAs
-not_all_na <- function(x) any(!is.na(x)) #for data cleaning
-
-chorizon <- chorizon %>% 
-  select_if(not_all_na)
-component <- component %>% 
-  select_if(not_all_na)
-mapunit <- mapunit %>% 
-  select_if(not_all_na)
-
-## Remove horizons that start below 2m
-chorizon200 = chorizon %>% 
-  filter(hzdept.r < 200) %>% 
-  droplevels()
-
-## Summarize var of interest
-## w/weighted mean of horizon thickness (above 200cm cutoff)
-chorizon200_wmean = chorizon200 %>% 
-  ## find thickness of each horizon
-  mutate(thick = ifelse(hzdepb.r > 200, 200 - hzdept.r,
-                        hzdepb.r - hzdept.r)) %>% 
-  ## weighted mean of each variable by component
-  group_by(cokey) %>% 
-  summarize(om = round(weighted.mean(om.r, thick, na.rm = TRUE), 2),
-            cec = round(weighted.mean(cec7.r, thick, na.rm = TRUE), 2),
-            ph = round(weighted.mean(ph1to1h2o.r, thick),2))
-
-
-## Filter component data for variables of interest
-component = component %>% 
-  dplyr::select(c(comppct.r, compname, slope.r, mukey, cokey))
-
-## join with horizon data
-component_horizon = left_join(component, chorizon200_wmean, by = "cokey")
-
-## Find weighted average of variables based on % component in a mapunit
-full_soil = component_horizon %>% 
-  group_by(mukey) %>% 
-  summarize(om = round(weighted.mean(om, comppct.r, na.rm = TRUE),2),
-            cec = round(weighted.mean(cec, comppct.r, na.rm = TRUE), 2),
-            ph = round(weighted.mean(ph, comppct.r, na.rm = TRUE),2),
-            slope = round(weighted.mean(slope.r, comppct.r, na.rm = TRUE), 2)) %>% 
-  ## join w/mapunit data
-  left_join(., mapunit, by = "mukey")
-
-## remove mapunit variables we don't care about and
-## convert commas to _ in muname so its csv compatible 
-full_soil <- full_soil %>% 
-  mutate(muname = gsub(", ", "_", muname)) %>% 
-  dplyr::select(!c(mukind, mapunitlfw.l:lkey)) %>% 
-  ## convert mukey from dbl to char for spatial join step
-  mutate(mukey = as.character(mukey))
-
-## Save as intermediate CSV
-write_csv(full_soil, here("data/ssurgo/horizon200_CA.csv"))
-```
-
-
-### Spatialize and export
-```{r}
-## Merge spatial and map unit data 
-## first read in/merge all spatial data (will take a while!)
-ssurgo_sf = NULL
-for (i in 1:nrow(CA_df)) {
-  area = paste0(here("data/ssurgo/extracted//"),
-                CA_df$template[i], 
-                "_ssurgo.gpkg")
-  
-  x <- st_read(area, layer = "geometry")
-  ssurgo_sf = rbind(ssurgo_sf, x)
-}
-
-## Merge with our final soil data
-ssurgo_sf <- ssurgo_sf %>% 
-  janitor::clean_names() %>% 
-  left_join(., full_soil, by = c("mukey", "musym"))
-
-## Create separate sf for variables to be extracted
-ssurgo_sf_filter <- ssurgo_sf %>% 
-  dplyr::select(mukey, om, ph, cec)
-
-## Save as .shp
-st_write(ssurgo_sf_filter, here("data/ssurgo/ssurgo_ca_200cm_select.shp"))
-
-## convert to vect first
-## some variable names changed by st_write...
-ssurgo_vect <- vect(ssurgo_sf)
-writeVector(ssurgo_vect, here("data/ssurgo/ssurgo_ca_200cm_full.shp"))
-```
-
-
-# NLCD
-Directly download NLCD data using the `FedData` package and a shapefile of CA provided by the `tigris` package. 
-```{r}
-## Get CA boundary from 2021 census info
-ca_shp <- tigris::states(resolution = "500k") %>% 
-  janitor::clean_names() %>% 
-  filter(name == "California")
-
-## Download in NLCD data
-years <- c("2001", "2004", "2006", "2008", 
-           "2011", "2013", "2016", "2019", "2021")
-
-for (i in 1:length(years)) {
-  nlcd <- FedData::get_nlcd(template = ca_shp, label = "CA",
-                            year = years[i],
-                            dataset = "landcover",
-                            extraction.dir = here("data/"))
-}
-
-```
-
-Exploring how many sppOcc are on high/med intensity development?
-```{r}
-## List only files with .tif extension (e.g. not .tif.aux)
-rast_list <- grep(list.files(here("data/nlcd/rasters")), 
-              pattern = ".tif.", invert = TRUE, value = TRUE)
-rast_yrs <- as.numeric(regmatches(rast_list, regexpr("[0-9].*[0-9]", rast_list)))
-rast_list_df <- data.frame(rast=rast_list,
-                           year=rast_yrs)
-
-## Sample spp to test
-names <- c("a_polycarpa", "a_menziesii", "p_ciliata", "l_pentachaeta")
-
-## Loop through land-use extractions at occ point
-## Output in tidy table
-nlcd_extract <- data.frame()
-plant_ext<- data.frame()
-# p in 1:length(names)
-for(p in 1:length(names)){
-  x <- read_csv(paste0(here("data/background/occ/combined_spp_occ//"), 
-                      names[p], "_lowFilter.csv"))
-  plant_ext <- data.frame()
-  
-      for(i in 1:nrow(rast_list_df)){
-        r <- rast(paste0(here("data/nlcd/rasters//"), rast_list_df$rast[i]))
-        if(i != nrow(rast_list_df)) {
-          x_range <- x %>% 
-                 filter(year >= rast_list_df$year[i] 
-                        & year < rast_list_df$year[i+1])
-        ##If filtering to last date, no next row to look at
-        ##Just do 2021-present
-        } else {
-          x_range <- x %>% 
-                 filter(year >= rast_list_df$year[i])
-        }
-        
-        ##If no entries in that time period, then skip to next 
-        if(nrow(x_range) > 0) {
-          v <- vect(x_range, geom = c("lon", "lat"), crs = "WGS84")
-          ext <- extract(r, v, ID = FALSE) %>% 
-            janitor::clean_names() %>% 
-            cbind(x_range, .)
-        } else {
-          next
-        }
-        
-        ##One df of all extracts for plant
-        plant_ext <- rbind(plant_ext, ext)
-        
-      }##End inner loop
-  
-  ##Summarize data and add to one consistent df
-  ##nlcd_extract main output
-  plants <- plant_ext %>%
-    group_by(class) %>%
-    summarize(count = length(class)) %>%
-    mutate(count_pct = round(count/sum(.$count)*100,2),
-           species = names[p])
-
-  nlcd_extract <- rbind(nlcd_extract, plants)
-    
-}##End outer loop
-
-## Save df for future reference
-write_csv(nlcd_extract, here("data/nlcd/nlcd_occ_extract.csv"))
-
-## Look at land use classes of interest
-nlcd_summary <- nlcd_extract %>% 
-  filter(class %in% c("Developed, Low Intensity",
-                      "Developed, Medium Intensity",
-                      "Developed High Intensity",
-                      "Cultivated Crops")) 
-
-## Results in table for sharing
-library(kableExtra)
-nlcd_summary %>% 
-  filter(!species %in% c("a_polycarpa")) %>% 
-  kbl() %>% 
-  kable_styling(full_width=F, bootstrap_options = "striped")
-```
-
-
-# FMMP
-Farmland Mapping & Monitoring Program data is used to explore more detailed farmland classifications. This data is downloaded directly from the CA Dept of Conservation:
-https://gis.conservation.ca.gov/portal/home/group.html?id=b1494c705cb34d01acf78f4927a75b8f#overview
-
-Newer years (2016-present) format data as .gdb, while older years just provide all .shp files in one folder. The following code chunk is used to extract all the layers (counties) from the newer .gdb data, isolate prime farmland, and save as one .shp file for the year
-```{r}
-save_prime_fxn <- function(year) {
-  ## Read in all layers (counties) of .gdb
-  path <- paste0(here("data/fmmp//"), year, 
-                 "/Important_Farmland_", year, ".gdb")
-  lyrs <- st_layers(path)
-  filter_prime <- function(lyr=lyrs$name) {
-    x <- read_sf(dsn = path, layer=lyr) %>% 
-      dplyr::filter(polygon_ty == "P")
-  }
-  prime_farms <- purrr::map(lyrs$name, filter_prime, .progress=TRUE)
-
-  ## Combine all prime farmland from year into one sf
-  counties <- data.frame()
-  for (i in 1:length(prime_farms)){
-    x <- prime_farms[[i]]
-    counties <- rbind(counties, x)
-  }
-  
-  ## Save .shp
-  filename <- paste0(here("data/fmmp/prime_farmland/prime_farmland_"), 
-                     year, ".shp")
-  write_sf(counties, filename)
-  
-  ## Changes names when saving (cannot figure out why)
-  ## So for making live easier, manually change all names
-  ## and resave to match 2000-2014 data
-  sf <- read_sf(paste0(here("data/fmmp/prime_farmland/prime_farmland_"), 
-                     year, ".shp"))
-  sf_rename <- sf %>% 
-    rename(polygon_ac = plygn_c,
-         county_nam = cnty_nm,
-         upd_year = upd_yer,
-         polygon_ty = plygn_t,
-         Shape_Length = Shp_Lng,
-         Shape_Area = Shap_Ar,
-         Shape = geometry) %>% 
-    vect()
-  writeVector(sf_rename, (paste0(here("data/fmmp/prime_farmland/prime_farmland_"),
-                                 year, ".shp")), overwrite=TRUE)
-}
-
-year <- c(2016, 2018, 2020)
-purrr::map(years, save_prime_fxn, .progress=TRUE)
-```
-
-For 2000-2014, we'll do the same process, but the code slightly differs due to data format.
-```{r}
-## Overall fxn to read in, filter, merge, and write .shp for a year
-prime_farm_filter <- function(year) {
-  path <- paste0(here("data/fmmp//"), year, "/", year, "_FMMP_shape_files")
-  lyrs <- list.files(path, pattern = ".shp", full.names = TRUE)
-  fxn <- function(lyrs){
-    x <- st_read(dsn = lyrs) %>% 
-      dplyr::filter(polygon_ty=="P") %>% 
-      janitor::clean_names()
-  }
-  prime_farms <- purrr::map(lyrs, fxn)
-  
-  ## Combine all prime farmland from year into one sf
-  counties <- data.frame()
-  for (i in 1:length(prime_farms)){
-    x <- prime_farms[[i]]
-    counties <- rbind(counties, x)
-  }
-
-  ## Save .shp
-  filename <- paste0(here("data/fmmp/prime_farmland//"),
-                     "prime_farmland_", year, ".shp")
-  write_sf(counties, filename)
-}##End fxn
-
-
-## List of years
-year = seq(2000,2014, by=2)
-## Run fxn over all years
-purrr::map(year, prime_farm_filter, .progress=TRUE)
-```
-
-
-How many spp occ are on prime farmland?
--**NOTE:** This loop doesn't fully work, because for a couple years (2016-2020) the extract returns multiple identical values (that aren't filtered out through `unique()` somehow). This returns an extraction df w/a different number of rows than the df of obs going into it, so they cannot be bound properly. 
-```{r}
-shp_list <- list.files(here("data/fmmp/prime_farmland/"), 
-                          pattern = ".shp", full.names = TRUE )
-year <- seq(2000, 2020, by=2)
-names <- c("a_polycarpa", "a_menziesii", "p_ciliata", "l_pentachaeta")
-
-## Loop through land-use extractions at occ point
-## Output in tidy table
-fmmp_extract <- data.frame()
-# p in 1:length(names)
-for(p in 1:length(names)){
-  x <- read_csv(paste0(here("data/occ/combined_spp_occ//"), 
-                      names[p], "_lowFilter.csv"))
-  plant_ext <- data.frame()
-    
-    ## Extract for each year of FMMP data
-    for(i in 1:length(shp_list)){
-      shp <- vect(shp_list[i])
-      
-      ## For 2020 FMMP, just extract from 2020-2023
-      if (i != length(shp_list)) {
-        x_range <- x %>% 
-               filter(year >= year[i] 
-                      & year < year[i+1])
-      } else {
-        x_range <- x %>% 
-               filter(year >= year[i])
-      }
-      
-      ## Vectorize and extract obs w/in date range
-      if(nrow(x_range) > 0) {
-        v <- vect(x_range, geom = c("lon", "lat"), crs = "WGS84") %>% 
-          project(y=crs(shp))
-        ext <- extract(shp, v) %>% 
-          janitor::clean_names() %>% 
-          dplyr::select(polygon_ty) %>% 
-          cbind(x_range, .)
-      ## If no entries w/in date range, skip to next 
-      } else {
-        next
-      }
-      
-      ##One df of all extracts for plant
-      plant_ext <- rbind(plant_ext, ext)
-      
-    }##End inner loop
-
-  ##Summarize data and add to one consistent df
-  ##nlcd_extract main output
-  plants <- plant_ext %>%
-    mutate(prime = case_when(polygon_ty == "P" ~ 1),
-           species = names[p]) %>% 
-    group_by(species) %>%
-    summarize(count = sum(prime, na.rm=TRUE),
-              count_pct = round((sum(prime, na.rm=TRUE))/length(polygon_ty)*100,2))
-
-  fmmp_extract <- rbind(fmmp_extract, plants)
-    
-}##End outer loop
-
-write_csv(nlcd_extract, here("data/nlcd/nlcd_occ_extract.csv"))
-
-## Look at some classes
-nlcd_summary <- nlcd_extract %>% 
-  filter(class %in% c("Developed, Low Intensity",
-                      "Developed, Medium Intensity",
-                      "Developed High Intensity",
-                      "Cultivated Crops")) 
-
-## Results in table for sharing
-library(kableExtra)
-nlcd_summary %>% 
-  filter(!species %in% c("a_polycarpa")) %>% 
-  kbl() %>% 
-  kable_styling(full_width=F, bootstrap_options = "striped")
 ```
