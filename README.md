@@ -1,7 +1,8 @@
 ## Overview:
-This repository contains the script and functions  used for modeling the distribution for native plant species of interest within Kern County, CA. Due to size limitatoins, most data for this analysis is not hosted in the repo. not pushed to the repo. Short descriptions of the data used, how they were obtained, and links to hosted data (where applicable) are provided in the "Data" section.
+This repository contains the script and functions  used for modeling the distribution for native plant species of interest within Kern County, CA. Due to size limitatoins, most data for this analysis is not hosted in the repo. Short descriptions of the data used, how they were obtained, and links to hosted data (where applicable) are provided in the "Data" section.
 
-The analysis was divided between three different scripts:
+## Code:
+The analysis was divided between three different scripts, all found in the `src/` directory:
 * `env_data_prep.Rmd` contains the code used to download and/or wrangle the environmental data used in the SDM (BCM and gNATSGO).
 * `spp_occ_background.Rmd` is the script for downloading and wrangling species occurrence data as well as generating background points (pseudo-absences) for each species. Environmental variables are extracted for occurrence and background points to prepare the data in samples with data (SWD) format for the SDM.
 * `kern_sdm.Rmd` evaluates the prepared data, then runs the SDMs for each species. Suitability probability distribution maps are also generated for each species by month.
