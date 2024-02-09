@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 library(tidyverse)    ## always
 library(here)         ## reading/writing data
-library(purrr)        ## run iterative fxns faster
+library(purrr)        ## iterate fxns
 library(sf)           ## vector objects
 library(terra)        ## Better/faster GIS
 library(raster)       ## GIS format required by Dismo
@@ -20,192 +20,24 @@ library(corrplot)     ## Correlation matrix
 ```
 
 
-# Overview
-
-This script extracts environmental data for each species occurrence (based on location and time). This data is then used to perform a species distribution model using Maxent with `dismo`.
-
-*   Species occurrence data was pulled from GBIF, CalFlora, and VegBank and filtered to return reasonably accurate presence-only data in California. The script for this is in "src" directory.
-
-*   Environmental data comes from the Basin Characterization Model version 8.0 (Flint et al., 2021) hosted by USGS as well as gNATSGO data hosted by the USDA-NRCS
-
-
-# Extract environmental data
-
-Using BCMv8 monthly and quarterly rasters, we'll extract information for each species occurrence (and background point) within the given time frame. The output will be one CSV with environmental data for each point.  
-```{r}
-## Each spp being modeled
-names <- c(
-  "a_polycarpa",
-  "p_arborea",
-  "c_pungens",
-  "l_pentachaeta",
-  "p_ciliata",
-  "a_menziesii",
-  "c_lasiophyllus"
-)
-
-## Read in fxn
-source(here('R/env_extract.R'))
-
-## Fxn variables
-pathMonth = here("data/bcmv8/2000_2022//")
-pathQuarter = here("data/bcmv8/quarterly_avgs//")
-soilRast = rast(here("data/natsgo/MapunitRaster_10m_CA_2023.tif"))
-horizon200 = read_csv(here("data/natsgo/horizon200_CA.csv"))
-```
-
-
-## Occurrence extraction:
-Loop through each species of interest and extract environmental data.
-**NOTE:** Testing effect of soil taxonomy on model. May/may not incorporate into `env_extract()` fxn based on results.
-```{r}
-for (i in length(names)) {
-  ## Read in species occurrence df
-  sppOcc <- read_csv(paste0(here('data/occ/combined_spp_occ//'),
-                            names[i],
-                            "_lowFilter.csv")) 
-  
-  occExtract_200 <- env_extract(startYear=2000, endYear=2022, 
-                             pathMonth, pathQuarter, soilRast, 
-                             horizon=horizon200, occ=sppOcc) 
-  dplyr::select(!c(mukey, musym:muname))
-  
-  
-  ### TESTING FOR SOIL TAXONOMY --------------------
-  soil_order <- st_read(here("data/statsgo/Cal_STATSGO2.shp")) %>%
-    janitor::clean_names() %>% 
-    ## remove polygons w/o soil data
-    filter(!is.na(order)) %>% 
-    dplyr::select(order) %>% 
-    vect()
-  
-  soil_series <- st_read(here("data/statsgo/Cal_STATSGO2.shp")) %>%
-    janitor::clean_names() %>% 
-    ## remove polygons w/o soil data
-    filter(!is.na(order)) %>% 
-    filter(type == "Series") %>% 
-    dplyr::select(series) %>% 
-    vect()
-  
-  occVect <- occExtract_200 %>% 
-    vect(geom = c("lon", "lat"), crs = "WGS84") %>% 
-    terra::project(y = crs(soil_order))
-  
-  extract1 <- extract(soil_order, occVect) %>% 
-    dplyr::select(!id.y)
-  extract2 <- extract(soil_series, occVect) %>% 
-    dplyr::select(!id.y)
-  occExtract_soils_200 <- cbind(occExtract_200, extract1, extract2)
-  
-  write_csv(occExtract_soils_200, paste0(here('data/swd//'), names[i], "/", 
-                                         names[i], "_200cm_soil_lowFilter.csv"))
-}
-
-```
-
-
-## Background extraction:
-Background point data are species-specific and generated in the "spp_occ_background.Rmd". Points are generated within 5km of the species occurrence points (convex hull with 5km buffer). Here, we'll run the `env_extract()` fxn and export the results for use in a species-specific SDM.
-
-**NOTE:** Currently testing different sets of background points (no restrictions, none on high development, none on prime farmland). Double-check file names before running
-```{r}
-for (i in length(names)) {
-  ## Read in background df
-  backOcc <- read_csv(paste0(here("data/background/back_"), 
-                             names[i],
-                             "_lowfilter_noFarm_5km.csv")) %>% 
-    janitor::clean_names()
-  
-  ## Extract for background points (this will take a while!!)
-  backExtract_200 <- env_extract(startYear=2000, endYear=2022,
-                               pathMonth, pathQuarter, soilRast,
-                               horizon=horizon200, occ = backOcc,
-                               lon = "x", lat = "y") 
-  
-  ## TESTING FOR SOIL TAXONOMY ------------------
-  soil_order <- st_read(here("data/statsgo/Cal_STATSGO2.shp")) %>%
-    janitor::clean_names() %>% 
-    ## remove polygons w/o soil data
-    filter(!is.na(order)) %>% 
-    dplyr::select(order) %>% 
-    vect()
-    
-  soil_series <- st_read(here("data/statsgo/Cal_STATSGO2.shp")) %>%
-    janitor::clean_names() %>% 
-    ## remove polygons w/o soil data
-    filter(!is.na(order)) %>% 
-    filter(type == "Series") %>% 
-    dplyr::select(series) %>% 
-    vect()
-  
-  # crs(soil_order) == crs(soil_series)
-  # [1] TRUE
-  
-  ## extract soil taxon
-  backVect <- backExtract_200 %>% 
-    vect(geom = c("x", "y"), crs = "WGS84") %>% 
-    terra::project(y = crs(soil_order))
-  
-  extract1 <- extract(soil_order, backVect) %>% 
-    dplyr::select(!id.y)
-  extract2 <- extract(soil_series, backVect) %>% 
-    dplyr::select(!id.y)
-  backExtract_soils_200 <- cbind(backExtract_200, extract1, extract2)
-  write_csv(backExtract_soils_200, paste0(here("data/swd//"),
-                                          names[i], "/backExtract_",
-                                          names[i], "_200cm_soil_noFarm_lowFilter.csv"))
-}
-
-
-```
+This script reads in the prepared species occurrence records and background points (produced in `spp_occ_background.Rmd`) to evaluate and run species distribution models. These models are made with Maxent in the `dismo` package.
 
 
 
-## Correlation
+# Correlation
 Assessing the correlation between environmental variables for SDM. Additional derived variables, such as mean temp and difference of temp, are generated. Then a Pearson correlation matrix is produced; based on the values, certain variables may be removed from the final SWD file.
 
 *NOTE:* UPDATE/CLEAN code chunk. Been testing out different variables (like soil taxonomy) as they get added to analysis.
 ```{r}
-# testOcc <- read_csv(here('data/swd/occExtract_2000_2022.csv')) %>% 
-#   mutate(tmean = (tmx+tmn)/2,
-#          tdiff = tmx-tmn) %>% 
-#   dplyr::select(aet:tdiff) %>% 
-#   dplyr::select(!c(cwd, pet))
-#
-# occCor = cor(testOcc, method = "pearson", use = "complete.obs")
-# corrplot(occCor, method = 'number', type = 'upper')
-
-
-testBack <- read_csv(here('data/swd/a_polycarpa/backExtract_a_polycarpa_200cm_lowFilter.csv')) %>% 
-  dplyr::select(aet:series) %>% 
+backgrd <- read_csv(here('data/swd/a_menziesii/backExtract_a_menziesii_soil200cm_drain_notaxon_lowFilter.csv')) %>% 
   mutate(tmean = (tmx+tmn)/2,
-         tdiff = tmx-tmn) %>%
-  dplyr::select(!c(cwd, pet, tmn, tmn, tmean, ppt_winter_mean)) %>% 
-  mutate(order = as.factor(order),
-         series = as.factor(series)) %>% 
-  mutate(order = unclass(order),
-         series = unclass(series)) %>% 
-  mutate(order = as.numeric(order),
-         series = as.numeric(series)) %>% 
-  dplyr::select(!c(order, series))
+         tdiff = tmx-tmn) %>% 
+    dplyr::select(aet:tdiff) 
+  # dplyr::select(!c(cwd, pet, tmn, tmn, tmean, ppt_winter_mean)) %>% 
 
-
-cor <- cor(testBack, method = "pearson", use = "everything")
+cor <- cor(backgrd, method = "pearson", use = "complete.obs")
 corrplot(cor, method = 'number', type = 'upper')
 
-# summer <- testBack %>% 
-#   dplyr::select(!ppt_winter) %>% 
-#   filter(!is.na(tmx_summer))
-# 
-# summerCor = cor(summer, method = "pearson", use = "everything")
-# corrplot(summerCor, method = 'number', type = 'upper')
-# 
-# winter <- testBack %>% 
-#   dplyr::select(!tmx_summer) %>% 
-#   filter(!is.na(ppt_winter))
-# 
-# winterCor = cor(winter, method = "pearson", use = "everything")
-# corrplot(winterCor, method = 'number', type = 'upper')
 ```
 
 
@@ -263,45 +95,72 @@ screeplot(back_pca, type = "barplot")
 
 
 
-# Maxent Models
+# Generate Maxent Models
 
 Construct model using Samples with Data (SWD) method.
 
 
 ### Input data
 
-Read in species occurrence and background data, then wrangle to put in proper format. 
-**NOTE:** Removing variables with higher correlation. Testing with different sets of background and occurrence points so double-check file names
+Read in species occurrence and background data, then wrangle to put in proper SWD format. Remove variables (due to high correlation or over-fitting) in this step.
 ```{r}
-## Occurrence data ----------------------------------------------------------
-swdOcc <- read_csv(here('data/swd/a_menziesii/a_menziesii_200cm_soil_lowFilter.csv')) %>% 
+names <- c(
+  "a_polycarpa",
+  "p_arborea",
+  "c_pungens",
+  "l_pentachaeta",
+  "p_ciliata",
+  "a_menziesii",
+  "c_lasiophyllus"
+)
+
+for (i in 1:length(names)){
+  ## Occurrence data -----------------------------------------------
+  swdOcc <- read_csv(paste0(here('data/swd//'), names[i], 
+                            '/occExtract_', names[i],
+                            '_soil200cm_drain_lowFilter.csv')) %>% 
   ## Add tmean, tdiff, and presence values
   mutate(tdiff = round(tmx-tmn, 2),
          presence = 1) %>% 
-  ## remove select variables
-  dplyr::select(!c(id, source, tmn, pet, cwd, ppt, date, ppt_winter_mean)) %>% 
-  rename("x" = "lon",
-         "y" = "lat")
+    ## remove select variables
+    dplyr::select(!c(id, source, tmn, pet, ppt_winter_mean, date,
+                     ## TEST: include cwd and monthly ppt
+                     # cwd,ppt
+                     # taxon
+                     )) %>% 
+    ## match background var names
+    rename("x" = "lon",
+           "y" = "lat") 
+  
+  ## rearrange x and y to match background df
+  swdOcc <- swdOcc[, c(2,1, 4, 3, 5:ncol(swdOcc))]
 
-## rearrange x and y to match background df
-swdOcc <- swdOcc[, c(2,1, 4, 3, 5:15)]
+  
+  ## Background Data -------------------------------------------------
+  swdBack <- read_csv(paste0(here("data/swd//"), names[i], 
+                             "/backExtract_", names[i],
+                             "_soil200cm_drain_notaxon_lowFilter.csv")) %>% 
+    mutate(tdiff = round(tmx-tmn, 2),
+           presence = 0) %>% 
+    dplyr::select(!c(tmn, pet, ppt_winter_mean,
+                     ##TEST: keep these vars
+                     # cwd, ppt
+                     ))
 
 
-## Background Data ----------------------------------------------------------
-swdBack <- read_csv(here('data/swd/a_menziesii/backExtract_a_menziesii_200cm_soil_noFarm_lowFilter.csv')) %>% 
-  mutate(tdiff = round(tmx-tmn, 2),
-         presence = 0) %>% 
-  dplyr::select(!c(tmn, pet, ppt, cwd, ppt_winter_mean))
+  ## ----------------------------------------------------------------
+  ## Bind into one df and
+  ## remove any rows in NAs
+  swd <- rbind(swdOcc, swdBack)
+  swd <- swd[complete.cases(swd),]
+  
+  write_csv(swd, paste0(here("data/swd//"), names[i], 
+                        "/swd_", names[i],
+                        "_soil200cm_cwdppt_drain_notaxon_lowFilter.csv"))
+}
 
-## --------------------------------------------------------------------------
-## Bind into one df and
-## remove any rows in NAs
-swd <- rbind(swdOcc, swdBack)
-swd <- swd[complete.cases(swd), ]
-
-write_csv(swd, here('data/swd/a_menziesii/swd_a_menziesii_200cm_soil_noFarm_lowFilter.csv'))
 ```
-
+ 
 
 ### Model fitting
 Fitting w/ENMeval
@@ -325,14 +184,26 @@ block <- get.block(occ, bg, orientation = "lat_lon")
 
 # Evaluating --------------------------------------
 occs.z <- swdOcc %>% 
-  dplyr::select(!c(month, year, presence))
+  dplyr::select(!c(month, year, presence))%>%
+  mutate(order = as.factor(order),
+         series = as.factor(series)) %>% 
+  mutate(order = unclass(order),
+         series = unclass(series)) %>% 
+  mutate(order = as.factor(order),
+         series = as.factor(series))
 bg.z <- swdBack %>% 
-  dplyr::select(!c(month, year, presence))
+  dplyr::select(!c(month, year, presence))%>%
+  mutate(order = as.factor(order),
+         series = as.factor(series)) %>% 
+  mutate(order = unclass(order),
+         series = unclass(series)) %>% 
+  mutate(order = as.factor(order),
+         series = as.factor(series))
 
 e.swd <- ENMevaluate(occs.z, bg=bg.z, algorith = "maxnet",
                      tune.args = list(fc = c("L", "LQ","LQH"),
-                                      rm = 1), 
-                     partitions = "block")
+                                      rm = seq(0.5,2, by=0.5)), 
+                     partitions = "randomkfold")
 
 e.swd
 eval.tune.settings(e.swd)
@@ -345,42 +216,8 @@ evalplot.stats(e=e.swd, stats = c("or.mtp", "auc.val"),
 
 Fitting w/dismo??
 ```{r}
-## Read in all points
-swd <- read_csv(here('data/swd/swd_2000_2022.csv'))
-
 ## Select env predictors for model (presence + background)
-x <- swd %>% 
-  dplyr::select(aet:tdiff)
-
-## Specify occurrence data
-p <- swd %>% 
-  dplyr::select(presence)
-
-## Arguments/options to pass to Maxent()
-args <- c('jackknife=TRUE', 
-          'autofeature=TRUE', 
-          'responsecurves=TRUE', 
-          'linear=TRUE',
-          'quadratic=TRUE',
-          'threshold=FALSE',
-          'hinge=FALSE',
-          'replicates=5', 'replicatetype=crossvalidate')
-
-## Path to save results
-path <- here('data/maxent_outputs/fitting/')
-
-
-
-## Run test model
-testModel <- maxent(x, p, path=path, args=args, removeDuplicates = TRUE)
-```
-
-
-### Final model
-**NOTE:** Using "x" or "x.soil" depending on dataset. Testing effects of soil taxonomy on model performance. Clean up later once set method determined.
-```{r}
-## Read in all points
-swd <- read_csv(here('data/swd/a_menziesii/swd_a_menziesii_200cm_soil_noFarm_lowFilter.csv'))
+swd <- read_csv(here('data/swd/a_menziesii/270soil/swd_a_menziesii_270soil_notaxon_200cm_lowFilter.csv'))
 
 ## Select env predictors for model (presence + background)
 x <- swd %>% 
@@ -396,91 +233,120 @@ x.soil <- x %>%
   mutate(order = as.factor(order),
          series = as.factor(series))
 
-
 ## Specify occurrence data
 p <- swd %>% 
   dplyr::select(presence)
 
-## Set Arguments/Options to Pass to Maxent
+## Arguments/options to pass to Maxent()
 args <- c('jackknife=TRUE', 
           'autofeature=TRUE', 
           'responsecurves=TRUE', 
           'linear=TRUE',
           'quadratic=TRUE',
-          'product=TRUE',
           'threshold=FALSE',
-          'hinge=FALSE', 
-          'maximumiterations=100000', 
-          'writeplotdata=TRUE')
+          'hinge=FALSE',
+          # 'maximumiterations=100000',
+          'randomtestpoints=25')
+          # 'replicates=5', 'replicatetype=crossvalidate')
 
 ## Path to save results
-path <- here('data/maxent_outputs/a_menziesii/200cm/noFarm')
-
-#Final Model Creation
-testFinal <- maxent(x.soil, p, path=path, args=args)
+path <- here('data/maxent_outputs/a_menziesii/270soil/notaxon/fitting/')
 
 
-# save(testFinal, file = here("data/maxent_outputs/final/Model.rData"))
+
+## Run test model
+testModel <- maxent(x, p, path=path, args=args, removeDuplicates = TRUE)
+```
+
+
+### Final model
+
+```{r}
+for (i in 1:length(names)) {
+    ## Read in all points
+  swd <- read_csv(paste0(here("data/swd//"), names[i], 
+                        "/swd_", names[i], "_soil200cm_cwdppt_drain_notaxon_lowFilter.csv"))
+  
+  ## Select env predictors for model (presence + background)
+  x <- swd %>% 
+    dplyr::select(aet:tdiff) %>% 
+    # mutate(taxon = as.factor(taxon)) %>%
+    mutate(drainage = as.factor(drainage))
+    # dplyr::select(!c(ppt, tdiff))
+  
+  ## Specify occurrence data
+  p <- swd %>% 
+    dplyr::select(presence)
+  
+  ## Set Arguments/Options to Pass to Maxent
+  args <- c('jackknife=TRUE', 
+            'autofeature=TRUE', 
+            'responsecurves=TRUE', 
+            'linear=TRUE',
+            'quadratic=TRUE',
+            'product=TRUE',
+            'threshold=FALSE',
+            'hinge=FALSE', 
+            'maximumiterations=100000', 
+            'writeplotdata=TRUE')
+  
+  ## Path to save results
+  path <- paste0(here('data/maxent_outputs//'),
+                      names[i], '/lowFilter/model/cwd_ppt/notaxon/drain/')
+  
+  #Final Model Creation
+  model <- maxent(x, p, path=path, args=args)
+
+  save(model, file = paste0(path, "/", names[i], "_sdm.rData"))
+}
+
 ```
 
 
 
-## Predictions
+# Predictions
 
 Now, we want to project the Maxent model predictions for each month to determine how suitability changes during the year. 
-
-
-### Average monthly environmental data:
-
-First we need to create rasters representing the monthly average for each predictor variable used in the model.
-```{r}
-## Read in fxn
-source(here('R/env_avg.R'))
-
-## Run fxn (shows progress bar)
-env_avg(var_names = c('aet', 'ppt', 'tmn', 'tmx'),
-        pathIn = here('data/bcmv8/2000_2022//'),
-        pathOut = here('data/bcmv8/monthly_avgs//'))
-```
-
 
 ### Run by month:
 
 Testing out prediction maps using only one year of monthly env data. 
 NOTE; testing out how to make this fxn work with user defined name/amount of variables w/o having to manually change the function... will think more on later.
 ```{r}
-variables = c('aet', 'ppt', 'tmn', 'tmx')
-df <- as.data.frame(variables) %>% 
-  mutate(varNum = seq(1:length(variables))) %>% 
-  pivot_wider(names_from = varNum, names_prefix = "var", values_from = variables) %>% 
-  slice(rep(1:n(), each = 12)) %>% 
-  mutate(month = c('jan', 'feb', 'mar', 'apr', 'may', 'jun',
-                   'jul', 'aug', 'sep', 'oct', 'nov', 'dec'))
-
-
-
-
-
+names <- c(
+  # "a_polycarpa",
+  # "p_arborea",
+  "c_pungens",
+  "l_pentachaeta",
+  "p_ciliata",
+  "a_menziesii",
+  "c_lasiophyllus"
+)
 
 ## Read in fxn
 source(here('R/pred_month.R'))
 
-## Read in Maxent model
-load(here('data/maxent_outputs/final/Model.rData'))
+## Loop fxn for all spp
+for (i in 1:length(names)) {
+  ## Read in Maxent model
+  print(paste0("Working on ", names[i]))
+  load(paste0(here("data/maxent_outputs//"), names[1],
+              ##CHANGE next time
+              "/lowFilter/model/cwd_ppt/notaxon/drain/",
+              names[1], "_sdm.rData"))
+  ## Run fxn
+  ## CHANGE "testFinal" ON NEXT RUN
+  pred_month(model = model,
+             bcmPath = here("data/bcmv8/monthly_avgs//"),
+             soilPath = here("data/natsgo/rasters//"),
+             pathOut = paste0(here("data/maxent_outputs//"),
+                              names[1], 
+                              "/lowFilter/monthly_rasters/cwd_ppt/drain//")
+             )
+}
 
-## Run fxn (shows progress bar)
-pred_month(model = testFinal,
-           pathIn = here('data/bcmv8/monthly_avgs//'),
-           pathOut = here('data/maxent_outputs/predictions//'))
 ```
 
-
-
-## Response Curves
-
-```{r}
-
-```
 
 
 
