@@ -93,11 +93,13 @@ env_extract <- function(startYear, endYear, pathMonth, pathQuarter, pathSoil,
             ## only keep first 3 chars of monthly columns
             ## (e.g. "cwd2021jan" becomes "cwd")
             rename_with(.fn= ~substr(., 1, 3), 
-                        .cols = 1:(nlyr(env_stack)-7)) %>% 
-            ## rename quarterly rasts
+                        ## only for columns of monthly variables
+                        .cols = 1:length(filesMonth)) %>% 
+            ## rename quarterly rasts; replace wy with _
             ## (e.g. "ppt2021winter_mean" becomes "ppt_winter_mean")
             rename_with(.fn= ~gsub(dates_df$wy[i], "_", x=.), 
-                        .cols = (ncol(.)-6):(ncol(.)-4)) %>% 
+                        ## only for columns of quarterly variables
+                        .cols = (length(filesMonth)+1):(ncol(.)-length(filesSoil))) %>% 
             ## merge occ data w/extract data
             cbind(occ_filter, .)
           
