@@ -28,7 +28,7 @@ This first section will read in, filter, and locally save species occurrence dat
 
 
 ### CalFlora
-This data was directly downloaded from the CalFlora website, found here:
+This data was downloaded from the CalFlora website, found here:
 https://www.calflora.org/entry/observ.html
 
 A separate CSV was downloaded for each species.
@@ -253,8 +253,8 @@ source(here("R/generate_backOcc.R"))
 
 ### 5km buffer
 buffer = 5000
-### use raster w/most NAs to retain more bkg pts
-raster = rast(here("data/natsgo/rasters/natsgo_taxon_270m_CA_2023.tif"))
+### reference raster
+raster = rast(here("data/bcmv8/monthly_avgs/aet_jan_avg.tif"))
 ### spp names
 names <- c(
   "a_polycarpa",
@@ -274,7 +274,7 @@ purrr::map(
     ## read in spp occurrence points
     sppOcc = read_csv(paste0(here("data/occ/combined_spp_occ//"),
                              names, 
-                             "_highFilter.csv"))
+                             "_lowFilter.csv"))
     
     ## Generate pts w/fxn
     backOcc_pts <- backOcc(sppOcc, raster=raster, buffer=buffer)
@@ -282,209 +282,17 @@ purrr::map(
     ## Save
     write_csv(backOcc_pts, paste0(here("data/background/back_"),
                                   names,
-                                  "_5km_highFilter.csv"))
+                                  "_5km_lowFilter.csv"))
   })
 
 ```
 
 
 
-### Omit development and farmland
-Test for generating background points omitting development/farm land-use.
-A little tricky because land use changes through the years, and background points are assigned years/months at random.
-To account for this, we'll use a loop that generates points for one layer (with development as NA) and assign dates within that time span to the points, and save as data frame. This dataframe will then be read in as "presence points" when the next raster is read, to ensure that points aren't generated in the same cells. 
-**NOTE** Keeping at 37 per mo/yr for direct comparison, but in future change this to different # that makes match easier 
-#### NLCD
-```{r}
-## List NLCD rasters
-rasts <- grep(list.files(here("data/nlcd/rasters"), full.names=TRUE), 
-              pattern = ".tif.", invert = TRUE, value = TRUE)
-rast_list <- map(rasts, rast)
-## Years for looping
-yrs <- grep(list.files(here("data/nlcd/rasters"), full.names=FALSE), 
-              pattern = ".tif.", invert = TRUE, value = TRUE)
-rast_yrs <- ((as.numeric(regmatches(yrs, regexpr("[0-9].*[0-9]", yrs)))) - 1) %>% 
-  append(2022)
-
-## Reference raster for res and CA shape
-aet_r = rast(here("data/bcmv8/2000_2022/aet2020dec.tif")) %>% 
-  project(y=crs(rast_list[[1]]))
-
-## Reclassify so heavy development value 0, all else 1
-rcl_m <- matrix(c(0, 23, 1,
-                  24, 24, 0, 
-                  25, 95, 1), ncol = 3, byrow=TRUE)
-
-## Map reclass/mask fxn across raster list
-rast_list_rcl <- map(rast_list, function(x){
-  r <- classify(x, rcl_m, right=NA)
-  ## Change res from 30m to 270m
-  r_agg <- terra::aggregate(r, fact=9, fun="modal")
-  ## Resample to mask
-  r_resamp <- r_agg %>% 
-    resample(., aet_r, method = "near") %>% 
-    crop(., aet_r, mask=TRUE)
-})
-
-
-
-back_noDev <- function(sppOcc) {
-  ## Vectorize sppOcc, find convex hull of pts, 
-  ## then add buffer
-  sppZone <- convHull(vect(sppOcc, 
-                          geom = c("lon", "lat"),
-                          crs = "WGS84")) %>% 
-    buffer(., width = 5000)
-  ## Start df for loop ()
-  backSamp <- data.frame("x" = NA, "y" = NA, "month"=NA, "year"=NA)
-  
-  ## Loop through making background points
-  for (i in 1:length(rast_list_rcl)) {
-    ## Read in raster by year
-    rast <- rast_list_rcl[[i]] %>% 
-      project(y=crs(sppZone), method = "near") %>% 
-      crop(y=sppZone, mask = TRUE) %>% 
-      ## Turn 0 to NA
-      classify(x=., cbind(0, NA))
-    r <- raster(rast)
-    
-    ## Need slightly different rules for first iteration
-    ## First NLCD year is 2001, but we're making points back to 2000,
-    ## So need to "add a year" of data 
-    if (i == 1) {
-      backOcc <- randomPoints(mask = r, 
-                            n = (((rast_yrs[i+1] - rast_yrs[i])+1)*444),
-                            p = backSamp,
-                            excludep = TRUE,
-                            prob = FALSE)
-      backOcc <- as.data.frame(backOcc)
-    
-      dates <- data.frame(month = rep(1:12, each = 37),
-                          year = rep(2000:rast_yrs[i+1], each = 444))
-      dates <- rbind(tail(dates, 111), head(dates, -111))
-      dates[1:111, 2] = (dates[112,2] - 1)
-    } else {
-      backOcc <- randomPoints(mask = r, 
-                            n = ((rast_yrs[i+1] - rast_yrs[i])*444),
-                            p = backSamp,
-                            excludep = TRUE,
-                            prob = FALSE)
-      backOcc <- as.data.frame(backOcc)
-      dates <- data.frame(month = rep(1:12, each = 37),
-                          year = rep((rast_yrs[i]+1):rast_yrs[i+1], each = 444))
-      dates <- rbind(tail(dates, 111), head(dates, -111))
-      dates[1:111, 2] = (dates[112,2] - 1)
-    }
-    
-    back_dates <- cbind(backOcc, dates)
-    backSamp <- rbind(backSamp, back_dates)
-    
-  }##END loop
-  ## Remove placeholder "NA" row
-  backSamp <- backSamp[-1,]
-}##END fxn
-  
-sppOcc <- read_csv(here("data/occ/combined_spp_occ/a_menziesii_lowFilter.csv"))
-backSamp_noDev <- back_noDev(sppOcc)
-
-### export
-write_csv(backSamp_noDev,
-          here('data/background/back_a_menziesii_lowfilter_noDev_5km.csv'))
-```
-
-
-
-#### FMMP
-```{r}
-## List FMMP vectors
-vects <- list.files(here("data/fmmp/prime_farmland/"), 
-                    pattern = ".shp",
-                    full.names=TRUE)
-vect_list <- map(vects, function(x) {
-  v <- vect(x) %>% 
-    project(y="NAD83")
-})
-## Years for looping
-yrs <- seq(2000, 2020, by=2) %>% 
-  append(2023)
-
-back_noFarm <- function(sppOcc) {
-  ## Vectorize sppOcc, find convex hull of pts, 
-  ## then add buffer
-  sppZone <- convHull(vect(sppOcc, 
-                          geom = c("lon", "lat"),
-                          crs = "WGS84")) %>% 
-    buffer(., width = 5000)
-  ## Start df for loop ()
-  backSamp <- data.frame("x" = NA, "y" = NA, "month"=NA, "year"=NA)
-  
-  ## Loop through making background points
-  for (i in 1:length(vect_list)) {
-    ## Read in reference raster
-    ## and mask by year
-    rast <- rast(here('data/bcmv8/2000_2022/aet2020dec.tif')) %>% 
-      ## Remove prime farmland
-      project(y=crs(vect_list[[i]])) %>% 
-      mask(mask=vect_list[[i]], inverse=TRUE, updatevalue=NA) %>%
-      ## Keep only area w/in spp zone
-      project(y=crs(sppZone)) %>% 
-      crop(y=sppZone, mask = TRUE)
-    
-    r <- raster(rast)
-
-    backOcc <- randomPoints(mask = r, 
-                            n = ((yrs[i+1] - yrs[i])*444),
-                            p = backSamp,
-                            excludep = TRUE,
-                            prob = FALSE)
-    backOcc <- as.data.frame(backOcc)
-    dates <- data.frame(month = rep(1:12, each = 37),
-                        year = rep(yrs[i]:(yrs[i+1]-1), each = 444))
-    dates <- rbind(tail(dates, 111), head(dates, -111))
-    dates[1:111, 2] = (dates[112,2] - 1)
-    
-    
-    back_dates <- cbind(backOcc, dates)
-    backSamp <- rbind(backSamp, back_dates)
-    
-  }##END loop
-  ## Remove placeholder "NA" row
-  backSamp <- backSamp[-1,]
-}##END fxn
-
-
-sppOcc <- read_csv(here("data/occ/combined_spp_occ/a_menziesii_lowFilter.csv"))
-backSamp_noFarm <- back_noFarm(sppOcc)
-
-### export
-write_csv(backSamp_noFarm,
-          here('data/background/back_a_menziesii_lowfilter_noFarm_5km.csv'))
-
-
-sppOcc <- read_csv(here("data/occ/combined_spp_occ/l_pentachaeta_lowFilter.csv"))
-backSamp_noFarm <- back_noFarm(sppOcc)
-
-### export
-write_csv(backSamp_noFarm,
-          here('data/background/back_l_pentachaeta_lowfilter_noFarm_5km.csv'))
-
-
-sppOcc <- read_csv(here("data/occ/combined_spp_occ/p_ciliata_lowFilter.csv"))
-backSamp_noFarm <- back_noFarm(sppOcc)
-
-### export
-write_csv(backSamp_noFarm,
-          here('data/background/back_p_ciliata_lowfilter_noFarm_5km.csv'))
-
-```
-
-
-
-
 
 # Extract environmental data
 
-Using the environmental data prepped in `env_data_prep.Rmd`,  we'll extract information for each species occurrence and background point within the given time frame. The output will be a CSV with environmental data for each point.  
+Using the environmental data prepped in `env_data_prep.Rmd`,  we'll extract information for each species occurrence and background point based on month and year. The output will be a CSV with environmental data for each point.  
 ```{r}
 ## Each spp being modeled
 names <- c(
@@ -516,7 +324,7 @@ for (i in 1:length(names)) {
   ## Read in species occurrence df
   sppOcc <- read_csv(paste0(here('data/occ/combined_spp_occ//'),
                             names[i],
-                            "_highFilter.csv"))
+                            "_lowFilter.csv"))
   
   print(paste0("Working on: ", names[i]))
   
@@ -526,7 +334,7 @@ for (i in 1:length(names)) {
   
   write_csv(occExtract, 
             paste0(here('data/swd//'), names[i], 
-                   "/occExtract_", names[i], "_soil200cm_highFilter.csv"))
+                   "/occExtract_", names[i], "_soil200cm_lowFilter.csv"))
 }
 ```
 
