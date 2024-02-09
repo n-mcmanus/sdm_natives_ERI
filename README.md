@@ -28,8 +28,9 @@ Note that all of these scripts call on functions located in the `R/` directory o
 * `background\`: contains the randomly generated backgrount points for each species. Naming convention of files is "back_species_buffersize_occfilter.csv" (e.g. back_a_menziesii_5km_lowFilter.csv)
 * `occ\`: contains the raw and filtered species occurrence data pulled from two databases
   * `calflora\`: species occurrence data from CalFlora, filtered and saved as .csv files. Naming convention is "species_calflora_occfilter.csv" (e.g. a_menziesii_calflora_lowFilter.csv)
-      * `download/`: the raw .csv files as downloaded from the CalFlora website, filtered and saved in the parent directory
+      * `download\`: the raw .csv files as downloaded from the CalFlora website, filtered and saved in the parent directory
   * `gbif\`: species occurrence data pulled from GBIF using the `rgbif` package, filtered, and then saved as a .csv. Naming convention is "species_gbif.csv" (e.g. a_menziesii_gbif.csv)
   * `combined_spp_occ\`: species occurrence data from GBIF and CalFlora combined, spatially thinned, and saved as a .csv. Naming convention is "species_occfilter.csv" (e.g. a_menziesii_lowFilter.csv)
-* `swd\`: species occurrence and background data formatted in "samples with data" (SWD) format for running in MaxEnt. These data have extracted environmental data by date and location of occurrence. Directory is divided into one folder per species. 
+* `swd\`: species occurrence and background data formatted in "samples with data" (SWD) format for running in MaxEnt. These data have extracted environmental data by date and location of occurrence. Directory is divided into one folder per species.
+  * Each species contains a file for extracted occurrence data ("occExtract_"), extracted background data ("backExtract_"), and combined occurrence+background data in SWD format ("swd_"). Extracted soil data has been aggregated to a user-defined depth. Naming convention is "fileextract_species_soildepth_occFilter.csv" (e.g. backExtract_a_menziesii_soil200cm_lowFilter.csv)
 
