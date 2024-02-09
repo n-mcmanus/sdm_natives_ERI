@@ -1,5 +1,5 @@
 ## Overview:
-This repository contains the script and functions  used for modeling the distribution for native plant species of interest within Kern County, CA. Due to size limitatoins, most data for this analysis is not hosted in the repo. Short descriptions of the data used, how they were obtained, and links to hosted data (where applicable) are provided in the "Data" section.
+This repository contains the script and functions  used for modeling the distribution for native plant species of interest within Kern County, CA. Due to size limitations, most raw and spatial data for this analysis is not hosted in the repo. Short descriptions of the data used, how they were obtained, and links to hosted data (where applicable) are provided in the "Data" section.
 
 ## Code:
 The analysis was divided between three different scripts, all found in the `src/` directory:
@@ -23,4 +23,13 @@ Note that all of these scripts call on functions located in the `R/` directory o
 ### Environmental data:
 * **<ins>BCMv8:</ins>** Climatic variables such as monthly max temperature, precipitation, AET, PET, and CWD were sourced from Basin Characterization Model (version 8). Data for each variable is available by month and year (for water years 1896-2022) in .asc format. More information on this model can be found on the [USGS website](https://www.usgs.gov/publications/basin-characterization-model-a-regional-water-balance-software-package "Model report"), and data can be downloaded directly from the [USGS ScienceBase repository](https://www.sciencebase.gov/catalog/item/5f29c62d82cef313ed9edb39 "BCMv8 Repository")
 * **<ins>gNATSGO:</ins>** Soil data such as pH, percent organic matter, and cation exchange capacity were obtained from the gridded National Soil Survey Geographic Database (gNATSGO). NATSGO combines data from the Soil Survey Geographic Database (SSURGO) and State Soil Geographic Databse (STATSGO), prioritizing SSURGO data where available and filling in missing areas with lower-level STATSGO data. More information and links for direct download by state are available on the USDA's Natural Resource Conservation Service [website.](https://www.nrcs.usda.gov/resources/data-and-reports/gridded-national-soil-survey-geographic-database-gnatsgo)
-  
+
+### Data directory:
+* `background\`: contains the randomly generated backgrount points for each species. Naming convention of files is "back_species_buffersize_occfilter.csv" (e.g. back_a_menziesii_5km_lowFilter.csv)
+* `occ\`: contains the raw and filtered species occurrence data pulled from two databases
+  * `calflora\`: species occurrence data from CalFlora, filtered and saved as .csv files. Naming convention is "species_calflora_occfilter.csv" (e.g. a_menziesii_calflora_lowFilter.csv)
+      * `download/`: the raw .csv files as downloaded from the CalFlora website, filtered and saved in the parent directory
+  * `gbif\`: species occurrence data pulled from GBIF using the `rgbif` package, filtered, and then saved as a .csv. Naming convention is "species_gbif.csv" (e.g. a_menziesii_gbif.csv)
+  * `combined_spp_occ\`: species occurrence data from GBIF and CalFlora combined, spatially thinned, and saved as a .csv. Naming convention is "species_occfilter.csv" (e.g. a_menziesii_lowFilter.csv)
+* `swd\`: species occurrence and background data formatted in "samples with data" (SWD) format for running in MaxEnt. These data have extracted environmental data by date and location of occurrence. Directory is divided into one folder per species. 
+
