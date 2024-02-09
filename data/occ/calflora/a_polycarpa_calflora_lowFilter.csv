@@ -1,4 +1,4 @@
-ID,Latitude,Longitude,Dataset,Datum,Error Radius (m),Accuracy: Square Meters,Plant,Observer,Date,Source,County,Location Description,Location Quality,Citation
+id,latitude,longitude,dataset,datum,error_radius_m,accuracy_square_meters,plant,observer,date,source,county,location_description,location_quality,citation
 mg198191,32.863378,-116.219379,mgr,WGS84,4,47,Atriplex polycarpa,Ryan O'Dell,2023-04-01,NA,San Diego,NA,high,"Calflora [web application]. 2023. Berkeley, California: The Calflora Database. Retrieved from https://www.calflora.org/ Sep 06, 2023."
 mg198187,33.138711,-116.375782,mgr,WGS84,6,114,Atriplex polycarpa,Ryan O'Dell,2023-04-01,NA,San Diego,NA,high,"Calflora [web application]. 2023. Berkeley, California: The Calflora Database. Retrieved from https://www.calflora.org/ Sep 06, 2023."
 mg198084,35.318154,-118.093608,mgr,WGS84,5,89,Atriplex polycarpa,Ryan O'Dell,2023-03-30,NA,Kern,NA,high,"Calflora [web application]. 2023. Berkeley, California: The Calflora Database. Retrieved from https://www.calflora.org/ Sep 06, 2023."

@@ -1,4 +1,4 @@
-ID,Latitude,Longitude,Dataset,Datum,Error Radius (m),Accuracy: Square Meters,Plant,Observer,Date,Source,County,Location Description,Location Quality,Citation
+id,latitude,longitude,dataset,datum,error_radius_m,accuracy_square_meters,plant,observer,date,source,county,location_description,location_quality,citation
 mg221296,37.897741,-121.934804,mgr,WGS84,15,712,Caulanthus lasiophyllus,Ryan O'Dell,2023-08-13,NA,Contra Costa,NA,high,"Calflora [web application]. 2023. Berkeley, California: The Calflora Database. Retrieved from https://www.calflora.org/ Sep 06, 2023."
 mg221295,37.896813,-121.93277,mgr,WGS84,4,55,Caulanthus lasiophyllus,Ryan O'Dell,2023-08-13,NA,Contra Costa,NA,high,"Calflora [web application]. 2023. Berkeley, California: The Calflora Database. Retrieved from https://www.calflora.org/ Sep 06, 2023."
 mg214583,37.911447,-122.494365,mgr,WGS84,23,1666,Caulanthus lasiophyllus,Amanda Magallanes,2023-07-10,Marin County Parks data pro,Marin,RING MOUNTAIN,high,"Calflora [web application]. 2023. Berkeley, California: The Calflora Database. Retrieved from https://www.calflora.org/ Sep 06, 2023."
