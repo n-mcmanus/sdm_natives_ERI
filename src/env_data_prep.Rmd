@@ -37,7 +37,7 @@ https://www.sciencebase.gov/catalog/item/5f29c62d82cef313ed9edb39
 source(here('R/asc_to_tif.R'))
 
 ## Assign file path (selects all .asc files in directory)
-filepath = here('data/bcmv8/2000_2022//')
+filepath = here('data/bcm/bcmv8_historic/2000_2022_monthly//')
 
 ## Run fxn
 asc_to_tif(filepath, remove = TRUE)
@@ -53,8 +53,8 @@ Using the `quarter_rast()` function, we'll generate rasters of either mean or cu
 source(here("R/quarterly_rast.R"))
 
 ## Define fxn variables
-pathIn = here("data/bcmv8/2000_2022//")
-pathOut = here("data/bcmv8/quarterly_avgs//")
+pathIn = here("data/bcm/bcmv8_historic/2000_2022_monthly//")
+pathOut = here("data/bcm/bcmv8_historic/quarterly_avgs//")
 startYear = 2000
 endYear = 2022
 
@@ -76,7 +76,7 @@ In addition to quarterly rasters by water year, we'll also need to make quarterl
 ## Avg of winter precip ----------------------------------------------------
 pptFiles <- list.files(
   ## read in the qtr avgs created in previous code chunk
-  path = here("data/bcmv8/quarterly_avgs//"),
+  path = here("data/bcm/bcmv8_historic/quarterly_avgs//"),
   ## only select winter ppt
   pattern = paste0("ppt", ".+", "winter_sum"),
   full.names = TRUE
@@ -87,12 +87,13 @@ pptStack <- terra::rast(c(pptFiles))
 ## find mean of all rasts
 pptStack_avg <- terra::app(pptStack, fun = 'mean')
 ## export mean rast
-writeRaster(pptStack_avg, here("data/bcmv8/monthly_avgs/ppt_winter_avg.tif"))
+writeRaster(pptStack_avg,
+            here("data/bcm/bcmv8_historic/monthly_avgs/ppt_winter_avg.tif"))
 
 
 ## Avg of summer tmx --------------------------------------------------------
 tmxFiles <- list.files(
-  path = here("data/bcmv8/quarterly_avgs//"),
+  path = here("data/bcm/bcmv8_historic/quarterly_avgs//"),
   ## only select tmx files
   pattern = "tmx",
   full.names = TRUE
@@ -101,7 +102,8 @@ tmxFiles <- list.files(
 ## read in as stack, find mean, then export
 tmxStack <- terra::rast(c(tmxFiles))
 tmxStack_avg <- terra::app(pptStack, fun = "mean")
-writeRaster(tmxStack_avg, here("data/bcmv8/monthly_avgs/tmx_summer_avg.tif"))
+writeRaster(tmxStack_avg,
+            here("data/bcm/bcmv8_historic/monthly_avgs/tmx_summer_avg.tif"))
 ```
 
 
@@ -133,8 +135,8 @@ vars <- data.frame(variable = rep(c("aet", "ppt", "tmn", "tmx", "cwd"), each = 1
   }
 
 ## Run fxn w/pmap
-pathIn = here("data/bcmv8/2000_2022//")
-pathOut = here("data/bcmv8/monthly_avgs//")
+pathIn = here("data/bcm/bcmv8_historic/2000_2022_monthly//")
+pathOut = here("data/bcm/bcmv8_historic/monthly_avgs//")
 purrr::pmap(.l=vars, .f=var_avg, pathIn, pathOut, .progress = TRUE)
 ```
 
@@ -166,8 +168,8 @@ tdiff_avg <- function(month, pathIn, pathOut) {
 }
 
 ## Run fxn w/pmap
-pathIn = here("data/bcmv8/2000_2022//")
-pathOut = here("data/bcmv8/monthly_avgs//")
+pathIn = here("data/bcm/bcmv8_historic/2000_2022_monthly//")
+pathOut = here("data/bcm/bcmv8_historic/monthly_avgs//")
 purrr::pmap(.l=vars, .f=tdiff_avg, pathIn, pathOut, .progress = TRUE)
 ```
 
@@ -177,45 +179,123 @@ purrr::pmap(.l=vars, .f=tdiff_avg, pathIn, pathOut, .progress = TRUE)
 
 Finally, to generate future species distribution probability maps, we'll have to wrangle projected environmental data. 
 
-Testing out how to read in and work with the netCDF files of projected BCM data. 
+Because there are varying coordinate systems on the raw files, we want to make them all uniform and match the CRS/spatial extent of our other environmental data (e.g. NATSGO). Because we only care about the monthly averages, we'll loop through and read in files by month, assign a proper CRS and resample to a reference raster, then generate our TDIFF rasters. We'll then save all the files in a separate folder for use in model predictions.
 
+*NOTE:* If you have several models you want to loop through, you can add one more wrapper fxn then iterate through a list of models with purrr::map. Only doing 2 now so didn't bother. This function is also very specific to the project's file structure. 
 ```{r}
-library(ncdf4)
+### Function to reproject, resample, and save rasters ----------------------
+bcm_future_reproj <- function(model, month, ref_r) {
+  ## path to "raw" files
+  pathIn <- paste0(here("data/bcm/bcm_future//"),
+                   model,
+                   "/raw")
+  ## path to save new files
+  pathOut <- paste0(here("data/bcm/bcm_future//"),
+                    model,
+                    "/resampled//")
+  
+  # Read in all the files for 30yr monthly data
+  raw_files <- list.files(
+    path = pathIn,
+    pattern = paste0(month, ".+", ".tif$"),
+    ## look through every folder in directory
+    recursive = TRUE,
+    full.names = TRUE
+  )
+  ## Both .rgb.tif and .tif files present, so keep only the .tif
+  raw_files <- grep(raw_files,
+                    pattern = ".rgb",
+                    invert = TRUE,
+                    value = TRUE)
+  
+  ## Loop through each file for that month and save
+  purrr::map(.x=raw_files, function(x) {
+    r <- rast(x)
+    ## manually assign crs
+    ## epsg:9001 cannot do terra::project() transformation
+    crs(r) <- crs(ref_r)
+    ## resample to ensure matching extent
+    r_res <- resample(r, ref_r, method = "bilinear")
+    
+    ## only keep var from the long file name
+    ## (needs to match var name from model)
+    old_name <- names(r_res)
+    var <- substr(x = old_name, start = 1, stop = 3)
+    names(r_res) <- var
+    
+    ## Save
+    writeRaster(r_res,
+                paste0(pathOut, var, "_", month, "_2070_2099_", model, ".tif"),
+                overwrite = TRUE)
+  })##End map
+  
+  ## Generate TDIFF raster for month
+  tmx <- rast(paste0(pathOut, "tmx_", month, "_2070_2099_", model, ".tif"))
+  tmn <- rast(paste0(pathOut, "tmn_", month, "_2070_2099_", model, ".tif"))
+  tdiff <- tmx - tmn
+  names(tdiff) <- "tdiff"
+  writeRaster(tdiff,
+              paste0(pathOut, "tdiff_", month, "_2070_2099_", model, ".tif"),
+              overwrite = TRUE)
+  
+}##END fxn
 
-## Read in w/modular format for looping --------------------
-ncpath <- here("data/bcmv8/MIROC//")
-ncname <- "MIROC5_rcp26_Monthly_tmx"  
-ncfname <- paste0(ncpath, ncname, ".nc")
 
-nc <- nc_open(ncfname)
+### Define fxn variables and iterate over all months -----------------------
+## reference raster for crs and resampling
+ref_r <- rast(here("data/bcm/bcmv8_historic/monthly_avgs/aet_apr_avg.tif"))
 
-## Get lon, lat, and time from file --------------------
-lon <- ncvar_get(nc, "x")
-nlon <- dim(lon) ##verify number of values
+## df of months
+months <- data.frame(month = c("jan", "feb", "mar", "apr", "may", "jun",
+                               "jul", "aug", "sep", "oct", "nov", "dec"))
 
-lat <- ncvar_get(nc, "y", verbose = F)
-nlat <- dim(lat)
+## iterate fxn over months for specific model
+purrr::pmap(.l = months, 
+            .f = bcm_future_reproj, 
+            model = "MIROC45",
+            ref_r = ref_r,
+            .progress = TRUE)
 
-time <- ncvar_get(nc, "time")
-head(time)
-# [1]   0  31  61  92 123 151
-## Looks like "monthly" data points, but we can
-## double-check time units and number of time steps
 
-tunits <- ncatt_get(nc,"time","units")
-# tunits
-# [1] "days since 2006-10-01"
-nt <- dim(time)
-# nt
-# [1] 1116
-## Confirmed unit of days, so with 1116 steps, each step a month,
-## and start date of 2006, we can confirm it goes to 2099
 
-## Get var of interest (monthly tmax)
-tmx <- ncvar_get(nc, "MIROC5_rcp26_Monthly_tmx")
-# Error: cannot allocate vector of size 64.9 Gb
 ```
 
+Here we'll generate quarterly values:
+```{r}
+## Winter precip ----------------------------------------------------
+pptFiles <- list.files(
+  ## read in the data just generated
+  path = here("data/bcm/bcm_future/MIROC45/resampled//"),
+  ## only select winter ppt
+  pattern = paste0("ppt", ".+", "dec|ppt", ".+", "jan|ppt", ".+", "feb"),
+  full.names = TRUE
+)
+
+## read in files as raster "stack"
+pptStack <- terra::rast(c(pptFiles))
+## find mean of all rasts
+pptStack_sum <- terra::app(pptStack, fun = 'sum')
+## export mean rast
+writeRaster(pptStack_sum,
+            here("data/bcm/bcm_future/MIROC45/resampled/ppt_winter_2070_2099_MIROC45.tif"))
+
+## Summer tmx --------------------------------------------------------
+tmxFiles <- list.files(
+  ## read in the data just generated
+  path = here("data/bcm/bcm_future/MIROC45/resampled//"),
+  ## only select winter ppt
+  pattern = paste0("tmx", ".+", "jun|tmx", ".+", "jul|tmx", ".+", "aug"),
+  full.names = TRUE
+)
+
+## read in files as raster "stack"
+tmxStack <- terra::rast(c(tmxFiles))
+## find mean of all rasts
+tmxStack_avg <- terra::app(tmxStack, fun = 'mean')
+## export mean rast
+writeRaster(tmxStack_avg,
+            here("data/bcm/bcm_future/MIROC45/resampled/tmx_summer_2070_2099_MIROC45.tif"))
+```
 
 
 
