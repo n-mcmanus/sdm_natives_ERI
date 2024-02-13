@@ -37,7 +37,9 @@ Note that all of these scripts call on functions located in the `R/` directory o
       * `2000_2022_monthly\`: monthly data (270m rasters) for water years 2000-2022 for the following variables: AET, PET, CWD, PPT, TMN, TMX. Naming convention is "variable+wateryear+month.tif" (e.g. aet2018oct.tif)
       * `monthly_avgs\`: Averaged rasters (270m) by variable and month over the entire time period (2000-2022). Naming convention is variable_month_avg.tif (e.g. aet_oct_avg.tif)
       * `quarterly_avgs\`: Rasters (270m) of cumulative precip or average tmax by quarter of water year. Winter quarter includes Dec, Jan, Feb. Summer quarter includes Jun, Jul, Aug. Naming convention is variable+wateryear+quarter_method (e.g. ppt2018winter_sum.tif).
-   * `bcm_future\`: contains projected data from the BCM, 2014 release
+   * `bcm_future\`: contains 30-year summary projected data from the BCM, 2014 release. There is a separate subdirectory for each climate model (e.g. MIROC45)
+      * `raw\`: projected BCM data as acquired from CA Climate Commons. There are separate folders for each variable and month, which contain rasters (270m) and metadata (.html) on the all the folder's contents.
+      * `resampled\`: projected and resampled future BCM data (270m rasters) to match the extent of other environmental data. These rasters are used in generating future suitability prediction rasters. Additional derived variables, such as TDIFF, are also located here. Naming convention is "variable_month_startYear_endYear_model_rcp.tif" (e.g. aet_oct_2070_2099_MIROC_rcp45.tif)
 * `natsgo\`: contains the gNATSGO data, but downloaded and generated, used for the analysis. 
    * `gNATSGO_CA\`: contains the geodatabase for California gNATSGO, 2023 release.
    *  `rasters\`: includes the mapunit raster (10m) exported from the geodatabase using ArcGIS, the map unit raster upscaled to 270m, and four rasters for each soil variable included in the model. Naming convention is "natsgo_variable_resolution_CA_2023.tif" (e.g. natsgo_ph_270m_CA_2023.tif)
