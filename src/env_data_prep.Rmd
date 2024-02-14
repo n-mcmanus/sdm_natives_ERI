@@ -252,11 +252,9 @@ months <- data.frame(month = c("jan", "feb", "mar", "apr", "may", "jun",
 ## iterate fxn over months for specific model
 purrr::pmap(.l = months, 
             .f = bcm_future_reproj, 
-            model = "MIROC45",
+            model = "MIROC85",
             ref_r = ref_r,
             .progress = TRUE)
-
-
 
 ```
 
@@ -265,7 +263,7 @@ Here we'll generate quarterly values:
 ## Winter precip ----------------------------------------------------
 pptFiles <- list.files(
   ## read in the data just generated
-  path = here("data/bcm/bcm_future/MIROC45/resampled//"),
+  path = here("data/bcm/bcm_future/MIROC85/resampled//"),
   ## only select winter ppt
   pattern = paste0("ppt", ".+", "dec|ppt", ".+", "jan|ppt", ".+", "feb"),
   full.names = TRUE
@@ -277,12 +275,12 @@ pptStack <- terra::rast(c(pptFiles))
 pptStack_sum <- terra::app(pptStack, fun = 'sum')
 ## export mean rast
 writeRaster(pptStack_sum,
-            here("data/bcm/bcm_future/MIROC45/resampled/ppt_winter_2070_2099_MIROC45.tif"))
+            here("data/bcm/bcm_future/MIROC85/resampled/ppt_winter_2070_2099_MIROC85.tif"))
 
 ## Summer tmx --------------------------------------------------------
 tmxFiles <- list.files(
   ## read in the data just generated
-  path = here("data/bcm/bcm_future/MIROC45/resampled//"),
+  path = here("data/bcm/bcm_future/MIROC85/resampled//"),
   ## only select winter ppt
   pattern = paste0("tmx", ".+", "jun|tmx", ".+", "jul|tmx", ".+", "aug"),
   full.names = TRUE
@@ -294,7 +292,7 @@ tmxStack <- terra::rast(c(tmxFiles))
 tmxStack_avg <- terra::app(tmxStack, fun = 'mean')
 ## export mean rast
 writeRaster(tmxStack_avg,
-            here("data/bcm/bcm_future/MIROC45/resampled/tmx_summer_2070_2099_MIROC45.tif"))
+            here("data/bcm/bcm_future/MIROC85/resampled/tmx_summer_2070_2099_MIROC85.tif"))
 ```
 
 
