@@ -46,5 +46,7 @@ Note that all of these scripts call on functions located in the `R/` directory o
    *  `horizon_200cm_CA.csv`: data frame output with horizon-level soil data (down to 200cm depth) aggregated by map unit.
 * `maxent_outputs\`: the model outputs and monthly suitability prediction maps. There is a separate subdirectory for each species.
    * `model\`: all the model outputs from running MaxEnt via dismo. These include response curve plots and a model summary titled "maxent.html". Each model was saved to later be read-in for generating suitability maps. The naming convention is "species_sdm.rData" (e.g. a_menziesii_sdm.rData)
-   * `monthly_dist_hist\`: monthly suitability distribution rasters (270m) based on historic (2000-2022) BCM data. Naming convention is "month_species_2000_2022.tif" (e.g. oct_a_menziesii_2000_2022.tif)
+   * `monthly_dist_hist\`: monthly distribution probability rasters (270m) based on historic (2000-2022) BCM data. Naming convention is "month_species_2000_2022.tif" (e.g. oct_a_menziesii_2000_2022.tif)
+   * `monthly_dist_future\`: monthly distribution probability rasters (270m) based on future BCM data. Separate folders for each future projection (e.g. MIROC45, MIROC85). Naming convention is "month_species_model_yearRange.tif" (e.g. oct_a_menziesii_MIROC45_2070_2099.tif)
+   * `monthly_dist_diff\`: rasters (270m) depicting the spatial difference in probability between future and historic values by month. Separate folders for each future projection considered. Naming convention is "month_species_model_futureRange_historicRange.tif" (e.g. oct_a_menziesii_MIROC45_20702099_20002022.tif). 
 
