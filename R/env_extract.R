@@ -97,8 +97,7 @@ env_extract <- function(startYear, endYear, pathMonth, pathQuarter, pathSoil,
             terra::project(., y = crs(env_stack))
           
           ## extract and tidy df
-          sppExtract <- extract(env_stack, occ_vect, 
-                                method = "simple", ID = FALSE) %>% 
+          sppExtract <- terra::extract(env_stack, occ_vect, method = "simple", ID = FALSE) %>% 
               ## only keep first 3 chars of monthly columns
               ## (e.g. "cwd2021jan" becomes "cwd")
               rename_with(.fn= ~substr(., 1, 3), 
