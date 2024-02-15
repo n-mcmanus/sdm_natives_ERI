@@ -5,7 +5,7 @@ date: "2023-07-07"
 output: html_document
 ---
 
-```{r setup, include=FALSE, message = FALSE}
+```{r setup, echo = TRUE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 library(tidyverse)            ## always
 library(here)                 ## reading/writing data
@@ -243,6 +243,7 @@ for (i in 1:length(names)) {
 ```
 
 
+
 # Background points
 
 Random background occurrence points will be generated using the `generate_backOcc()` function (relies on `dismo` and `terra` packages) and exported as a CSV file. Spatially, background points are generated within a 5km range of observed occurrences. Temporally, the relative number of background points per water year matches that of observations. A minimum number of 10,000 points are generated for each species; the exact number slightly varies to accommodate temporal distribution. 
@@ -254,7 +255,7 @@ source(here("R/generate_backOcc.R"))
 ### 5km buffer
 buffer = 5000
 ### reference raster
-raster = rast(here("data/bcmv8/monthly_avgs/aet_jan_avg.tif"))
+raster = rast(here("data/natsgo/rasters/natsgo_drclass_270m_CA_2023.tif"))
 ### spp names
 names <- c(
   "a_polycarpa",
@@ -311,8 +312,8 @@ source(here('R/env_extract.R'))
 ## Fxn variables
 startYear = 2000
 endYear = 2022
-pathMonth = here("data/bcmv8/2000_2022//")
-pathQuarter = here("data/bcmv8/quarterly_avgs//")
+pathMonth = here("data/bcm/bcmv8_historic/2000_2022_monthly//")
+pathQuarter = here("data/bcm/bcmv8_historic/quarterly_avgs//")
 pathSoil = here("data/natsgo/rasters//")
 ```
 
@@ -334,7 +335,8 @@ for (i in 1:length(names)) {
   
   write_csv(occExtract, 
             paste0(here('data/swd//'), names[i], 
-                   "/occExtract_", names[i], "_soil200cm_lowFilter.csv"))
+                   "/occExtract_", names[i],
+                   "_soil200cm_lowFilter.csv"))
 }
 ```
 
@@ -345,7 +347,7 @@ Background point data are also species-specific, so must be looped through list.
 for (i in 1:length(names)) {
   ## Read in background df
   backOcc <- read_csv(paste0(here("data/background/back_"), 
-                             names[i], "_5km_lowFilter.csv")) %>% 
+                             names[i], "_5km_highFilter.csv")) %>% 
     janitor::clean_names()
   
   print(paste0("Working on: ", names[i]))
@@ -358,7 +360,8 @@ for (i in 1:length(names)) {
   
   write_csv(backExtract, 
             paste0(here('data/swd//'), names[i], 
-                   "/backExtract_", names[i], "_soil200cm_lowFilter.csv"))
+                   "/backExtract_", names[i],
+                   "_soil200cm_highFilter.csv"))
 }
 
 ```
