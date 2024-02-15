@@ -23,78 +23,6 @@ library(corrplot)     ## Correlation matrix
 This script reads in the prepared species occurrence records and background points (produced in `spp_occ_background.Rmd`) to evaluate and run species distribution models. These models are made with Maxent in the `dismo` package.
 
 
-
-# Correlation
-Assessing the correlation between environmental variables for SDM. Additional derived variables, such as mean temp and difference of temp, are generated. Then a Pearson correlation matrix is produced; based on the values, certain variables may be removed from the final SWD file.
-
-*NOTE:* UPDATE/CLEAN code chunk. Been testing out different variables (like soil taxonomy) as they get added to analysis.
-```{r}
-backgrd <- read_csv(here('data/swd/a_menziesii/backExtract_a_menziesii_soil200cm_drain_notaxon_lowFilter.csv')) %>% 
-  mutate(tmean = (tmx+tmn)/2,
-         tdiff = tmx-tmn) %>% 
-    dplyr::select(aet:tdiff) 
-  # dplyr::select(!c(cwd, pet, tmn, tmn, tmean, ppt_winter_mean)) %>% 
-
-cor <- cor(backgrd, method = "pearson", use = "complete.obs")
-corrplot(cor, method = 'number', type = 'upper')
-
-```
-
-
-Quick test code for PCA
-```{r}
-back<- read_csv(here("data/swd/a_polycarpa/backExtract_a_polycarpa_200cm_lowFilter.csv"))
-apoly <- read_csv(here("data/swd/a_polycarpa/a_polycarpa_200cm_lowFilter.csv"))
-
-back_pca <- back %>% 
-  dplyr::select(where(is.numeric)) %>%
-  dplyr::select(!c(x:year)) %>% 
-  drop_na() %>% 
-  # scale() %>%
-  prcomp(scale.=TRUE)
-
-apoly_pca <- apoly %>% 
-  dplyr::select(where(is.numeric)) %>% 
-  dplyr::select(!c(lat:month)) %>% 
-  drop_na() %>% 
-  prcomp(scale.=TRUE)
-
-back_pca$rotation
-apoly_pca$rotation
-
-library(ggfortify)
-
-autoplot(back_pca, 
-         loadings = TRUE, loadings.label = TRUE,
-         loadings.colour = "black", loadings.label.color = "darkblue",
-           loadings.label.size = 4, loadings.label.background = TRUE,
-         loadings.label.vjust = -0.5,
-         ) +
-  theme_minimal()
-
-
-both <- read_csv(here("data/swd/a_polycarpa/swd_a_polycarpa_200cm_lowFilter.csv")) %>% 
-  mutate(presence = factor(presence, levels = c('0', '1')))
-both_pca <- both %>% 
-  dplyr::select(where(is.numeric)) %>% 
-  dplyr::select(!c(x:year)) %>% 
-  drop_na() %>% 
-  prcomp(scale.=TRUE)
-
-autoplot(both_pca, data = both, loadings = TRUE, loadings.label = TRUE, 
-         loadings.label.color = "darkblue",
-         colour = "presence")+
-    scale_color_manual(values = c( 'orange', 'darkgreen')) +
-  scale_fill_manual(values = c('orange',  'darkgreen')) +
-  theme_minimal()
-
-
-screeplot(back_pca, type = "barplot")
-```
-
-
-
-
 # Generate Maxent Models
 
 Construct model using Samples with Data (SWD) method.
@@ -118,16 +46,12 @@ for (i in 1:length(names)){
   ## Occurrence data -----------------------------------------------
   swdOcc <- read_csv(paste0(here('data/swd//'), names[i], 
                             '/occExtract_', names[i],
-                            '_soil200cm_drain_lowFilter.csv')) %>% 
-  ## Add tmean, tdiff, and presence values
+                            '_soil200cm_highFilter.csv')) %>% 
+  ## Add tdiff and "presence"
   mutate(tdiff = round(tmx-tmn, 2),
          presence = 1) %>% 
-    ## remove select variables
-    dplyr::select(!c(id, source, tmn, pet, ppt_winter_mean, date,
-                     ## TEST: include cwd and monthly ppt
-                     # cwd,ppt
-                     # taxon
-                     )) %>% 
+    ## remove unwanted variables
+    dplyr::select(!c(id, source, tmn, pet, date, cwd, ppt)) %>% 
     ## match background var names
     rename("x" = "lon",
            "y" = "lat") 
@@ -139,13 +63,11 @@ for (i in 1:length(names)){
   ## Background Data -------------------------------------------------
   swdBack <- read_csv(paste0(here("data/swd//"), names[i], 
                              "/backExtract_", names[i],
-                             "_soil200cm_drain_notaxon_lowFilter.csv")) %>% 
+                             "_soil200cm_highFilter.csv")) %>% 
+    ## add tdiff and presense
     mutate(tdiff = round(tmx-tmn, 2),
            presence = 0) %>% 
-    dplyr::select(!c(tmn, pet, ppt_winter_mean,
-                     ##TEST: keep these vars
-                     # cwd, ppt
-                     ))
+    dplyr::select(!c(tmn, pet, cwd, ppt))
 
 
   ## ----------------------------------------------------------------
@@ -156,19 +78,85 @@ for (i in 1:length(names)){
   
   write_csv(swd, paste0(here("data/swd//"), names[i], 
                         "/swd_", names[i],
-                        "_soil200cm_cwdppt_drain_notaxon_lowFilter.csv"))
+                        "_soil200cm_highFilter.csv"))
 }
 
 ```
- 
 
-### Model fitting
+
+
+## Model evaluation
+
+#### Correlation
+Assessing the correlation between environmental variables for SDM. Additional derived variables, such as mean temp and difference of temp, are generated. Then a Pearson correlation matrix is produced; based on the values, certain variables may be removed from the final SWD file.
+
+```{r}
+back <- read_csv(here('data/swd/a_menziesii/backExtract_a_menziesii_soil200cm_lowFilter.csv')) %>% 
+  mutate(tmean = (tmx+tmn)/2,
+         tdiff = tmx-tmn) %>% 
+    dplyr::select(aet:tdiff) 
+  # dplyr::select(!c(cwd, pet, tmn, tmn, tmean, ppt_winter_mean)) %>% 
+
+cor <- cor(back, method = "pearson", use = "complete.obs")
+corrplot(cor, method = 'number', type = 'upper')
+
+```
+
+Quick test code for PCA to see if it gives further insight 
+```{r}
+back<- read_csv(here("data/swd/a_menziesii/backExtract_a_menziesii_soil200cm_lowFilter.csv"))
+full <- read_csv(here("data/swd/a_menziesii/swd_a_menziesii_soil200cm_lowFilter.csv")) %>% 
+  mutate(presence = factor(presence, levels = c('0', '1')))
+  
+back_pca <- back %>% 
+  dplyr::select(where(is.numeric)) %>%
+  dplyr::select(!c(x:year)) %>% 
+  drop_na() %>% 
+  # scale() %>%
+  prcomp(scale.=TRUE)
+
+full_pca <- full %>% 
+  dplyr::select(where(is.numeric)) %>% 
+  dplyr::select(!c(x:year)) %>% 
+  drop_na() %>% 
+  prcomp(scale.=TRUE)
+
+back_pca$rotation
+full_pca$rotation
+
+library(ggfortify)
+
+autoplot(back_pca, 
+         loadings = TRUE, loadings.label = TRUE,
+         loadings.colour = "black", loadings.label.color = "darkblue",
+           loadings.label.size = 4, loadings.label.background = TRUE,
+         loadings.label.vjust = -0.5,
+         ) +
+  theme_minimal()
+
+autoplot(full_pca, data = full, loadings = TRUE, loadings.label = TRUE, 
+         loadings.label.color = "darkblue",
+         colour = "presence")+
+    scale_color_manual(values = c( 'orange', 'darkgreen')) +
+  scale_fill_manual(values = c('orange',  'darkgreen')) +
+  theme_minimal()
+
+
+screeplot(back_pca, type = "barplot")
+```
+
+
+
+#### Model fitting
 Fitting w/ENMeval
 - spatial partitioning methods preferable to random k-fold bc w/large occurrence dataset, it could randomly resut in spatial clustering. Other methods address spatial autocorrelation better (Roberts et al. 2017)
-**NOTE:** CLEAN UP THIS SECTION. More definitive fitting code using ENMeval only
 ```{r}
 library(ENMeval)
 
+swdOcc <- read_csv(here("data/swd/a_menziesii/swd_a_menziesii_soil200cm_lowFilter.csv")) %>% 
+  filter(presence == 1)
+swdBack <- read_csv(here("data/swd/a_menziesii/swd_a_menziesii_soil200cm_lowFilter.csv")) %>% 
+  filter(presence == 0)
 ### occ and background can only be lon/lat
 occ <- swdOcc %>% 
   dplyr::select(x, y)
@@ -176,34 +164,24 @@ occ <- swdOcc %>%
 bg <- swdBack %>% 
   dplyr::select(x,y)
 
-block <- get.block(occ, bg, orientation = "lat_lon")
+block <- get.block(occ, bg, orientation = "lon_lat")
 ## check for even number in each group
 # table(block$occs.grp)
-# 1   2   3   4 
-# 153 153 153 152 
+#   1   2   3   4 
+# 503 502 502 502 
 
 # Evaluating --------------------------------------
 occs.z <- swdOcc %>% 
-  dplyr::select(!c(month, year, presence))%>%
-  mutate(order = as.factor(order),
-         series = as.factor(series)) %>% 
-  mutate(order = unclass(order),
-         series = unclass(series)) %>% 
-  mutate(order = as.factor(order),
-         series = as.factor(series))
+  dplyr::select(!c(month, year, presence)) %>% 
+  mutate(drclass = as.factor(drclass))
 bg.z <- swdBack %>% 
   dplyr::select(!c(month, year, presence))%>%
-  mutate(order = as.factor(order),
-         series = as.factor(series)) %>% 
-  mutate(order = unclass(order),
-         series = unclass(series)) %>% 
-  mutate(order = as.factor(order),
-         series = as.factor(series))
+  mutate(drclass = as.factor(drclass))
 
 e.swd <- ENMevaluate(occs.z, bg=bg.z, algorith = "maxnet",
                      tune.args = list(fc = c("L", "LQ","LQH"),
-                                      rm = seq(0.5,2, by=0.5)), 
-                     partitions = "randomkfold")
+                                      rm = seq(0.5,1.5, by=0.5)), 
+                     partitions = "block")
 
 e.swd
 eval.tune.settings(e.swd)
@@ -214,65 +192,29 @@ evalplot.stats(e=e.swd, stats = c("or.mtp", "auc.val"),
 ```
 
 
-Fitting w/dismo??
-```{r}
-## Select env predictors for model (presence + background)
-swd <- read_csv(here('data/swd/a_menziesii/270soil/swd_a_menziesii_270soil_notaxon_200cm_lowFilter.csv'))
-
-## Select env predictors for model (presence + background)
-x <- swd %>% 
-  dplyr::select(aet:tdiff) 
-## Testing for soil taxonomy
-## Dismo says must be factors, but also numbers?
-## Factor them, then turn into numbers, then factor again
-x.soil <- x %>%
-  mutate(order = as.factor(order),
-         series = as.factor(series)) %>% 
-  mutate(order = unclass(order),
-         series = unclass(series)) %>% 
-  mutate(order = as.factor(order),
-         series = as.factor(series))
-
-## Specify occurrence data
-p <- swd %>% 
-  dplyr::select(presence)
-
-## Arguments/options to pass to Maxent()
-args <- c('jackknife=TRUE', 
-          'autofeature=TRUE', 
-          'responsecurves=TRUE', 
-          'linear=TRUE',
-          'quadratic=TRUE',
-          'threshold=FALSE',
-          'hinge=FALSE',
-          # 'maximumiterations=100000',
-          'randomtestpoints=25')
-          # 'replicates=5', 'replicatetype=crossvalidate')
-
-## Path to save results
-path <- here('data/maxent_outputs/a_menziesii/270soil/notaxon/fitting/')
-
-
-
-## Run test model
-testModel <- maxent(x, p, path=path, args=args, removeDuplicates = TRUE)
-```
-
 
 ### Final model
-
+Generate and save SDMs for each species
 ```{r}
+names <- c(
+  "a_polycarpa",
+  "p_arborea",
+  "c_pungens",
+  "l_pentachaeta",
+  "p_ciliata",
+  "a_menziesii",
+  "c_lasiophyllus"
+)
+
 for (i in 1:length(names)) {
-    ## Read in all points
+  # Read in all points
   swd <- read_csv(paste0(here("data/swd//"), names[i], 
-                        "/swd_", names[i], "_soil200cm_cwdppt_drain_notaxon_lowFilter.csv"))
+                        "/swd_", names[i], "_soil200cm_lowFilter.csv"))
   
   ## Select env predictors for model (presence + background)
   x <- swd %>% 
     dplyr::select(aet:tdiff) %>% 
-    # mutate(taxon = as.factor(taxon)) %>%
-    mutate(drainage = as.factor(drainage))
-    # dplyr::select(!c(ppt, tdiff))
+    mutate(drclass = as.factor(drclass))
   
   ## Specify occurrence data
   p <- swd %>% 
@@ -292,11 +234,12 @@ for (i in 1:length(names)) {
   
   ## Path to save results
   path <- paste0(here('data/maxent_outputs//'),
-                      names[i], '/lowFilter/model/cwd_ppt/notaxon/drain/')
+                 names[i], '/lowFilter/model/')
   
-  #Final Model Creation
+  ## Final Model Creation
   model <- maxent(x, p, path=path, args=args)
 
+  ## Save model for pred rasters
   save(model, file = paste0(path, "/", names[i], "_sdm.rData"))
 }
 
@@ -308,10 +251,9 @@ for (i in 1:length(names)) {
 
 Now, we want to project the Maxent model predictions for each month to determine how suitability changes during the year. 
 
-### Run by month:
+### Historic
 
-Testing out prediction maps using only one year of monthly env data. 
-NOTE; testing out how to make this fxn work with user defined name/amount of variables w/o having to manually change the function... will think more on later.
+Generate monthly distribution probabilities based on historic variables
 ```{r}
 names <- c(
   # "a_polycarpa",
@@ -330,27 +272,155 @@ source(here('R/pred_month.R'))
 for (i in 1:length(names)) {
   ## Read in Maxent model
   print(paste0("Working on ", names[i]))
-  load(paste0(here("data/maxent_outputs//"), names[1],
-              ##CHANGE next time
-              "/lowFilter/model/cwd_ppt/notaxon/drain/",
-              names[1], "_sdm.rData"))
+  load(paste0(here("data/maxent_outputs//"), names[i],
+              "/lowFilter/model/",
+              names[i], "_sdm.rData"))
   ## Run fxn
-  ## CHANGE "testFinal" ON NEXT RUN
   pred_month(model = model,
-             bcmPath = here("data/bcmv8/monthly_avgs//"),
+             spp = names[i],
+             model_years = "2000_2022",
+             bcmPath = here("data/bcm/bcmv8_historic/monthly_avgs//"),
              soilPath = here("data/natsgo/rasters//"),
              pathOut = paste0(here("data/maxent_outputs//"),
-                              names[1], 
-                              "/lowFilter/monthly_rasters/cwd_ppt/drain//")
+                              names[i], 
+                              "/lowFilter/monthly_dist_hist/")
              )
 }
 
 ```
 
 
+### Future
+
+Generate monthly distribution probabilities based on future variables
+```{r}
+## spp to run
+names <- c(
+  # "a_polycarpa",
+  # "p_arborea",
+  "c_pungens",
+  "l_pentachaeta",
+  "p_ciliata",
+  "a_menziesii",
+  "c_lasiophyllus"
+)
+
+## Read in fxn
+source(here('R/pred_month.R'))
 
 
+### MIROC45 ----------------------------------------
+## Loop fxn for all spp
+for (i in 1:length(names)) {
+  print(paste0("Working on ", names[i]))
+  ## Read in Maxent model
+  load(paste0(here("data/maxent_outputs//"), 
+              names[i],
+              "/lowFilter/model/",
+              names[i],
+              "_sdm.rData"))
+  ## Run fxn
+  pred_month(
+    model = model,
+    spp = names[i],
+    model_years = "MIROC45_2070_2099",
+    bcmPath = here("data/bcm/bcm_future/MIROC45/resampled//"),
+    soilPath = here("data/natsgo/rasters//"),
+    pathOut = paste0(here("data/maxent_outputs//"),
+                     names[i],
+                     "/lowFilter/monthly_dist_future/MIROC45/")
+  )
+}
 
+
+### MIROC85 ----------------------------------------
+## Loop fxn for all spp
+for (i in 1:length(names)) {
+  print(paste0("Working on ", names[i]))
+  ## Read in Maxent model
+  load(paste0(here("data/maxent_outputs//"), 
+              names[i],
+              "/lowFilter/model/",
+              names[i],
+              "_sdm.rData"))
+  ## Run fxn
+  pred_month(
+    model = model,
+    spp = names[i],
+    model_years = "MIROC85_2070_2099",
+    bcmPath = here("data/bcm/bcm_future/MIROC85/resampled//"),
+    soilPath = here("data/natsgo/rasters//"),
+    pathOut = paste0(here("data/maxent_outputs//"),
+                     names[i],
+                     "/lowFilter/monthly_dist_future/MIROC85/")
+  )
+}
+
+```
+
+
+### Difference
+It may be interesting to see how much suitability changes between historic (2000-2022) and future (2070-2099) conditions.
+```{r}
+### First bundle fxn input data together -------------
+## list of spp
+names <- c(
+  # "a_polycarpa",
+  # "p_arborea",
+  "c_pungens",
+  "l_pentachaeta",
+  "p_ciliata",
+  "a_menziesii",
+  "c_lasiophyllus"
+)
+## list of months
+months = c("jan","feb", "mar","apr", "may","jun",
+          "jul","aug","sep","oct","nov", "dec")
+
+## combine into df for purrr::map
+df <- data.frame("spp" = rep(names, each = length(months)),
+                 "month" = rep(months, length(names)))
+
+
+### Next create fxn to find diff by month and spp ----------
+dist_prob_diff <- function(spp, month, model) {
+  ## read in historic prob
+  hist_r <- terra::rast(list.files(
+    path = paste0(here("data/maxent_outputs//"),
+                  spp,
+                  "/lowFilter/monthly_dist_hist/"),
+    pattern = month,
+    full.names = TRUE))
+  
+  ## read in future prob
+  future_r <- terra::rast(list.files(
+    path = paste0(here("data/maxent_outputs//"),
+                  spp,
+                  "/lowFilter/monthly_dist_future//",
+                  model,
+                  "/"),
+    pattern = month,
+    full.names = TRUE))
+  
+  ## find difference between rasters
+  diff_r <- future_r - hist_r
+  
+  ## save 
+  writeRaster(diff_r, paste0(here("data/maxent_outputs//"),
+                             spp,
+                             "/lowFilter/monthly_dist_diff//",
+                             model, "//",
+                             month, "_", spp, "_", model, "_20702099_20002022_diff.tif"))
+} ## end fxn
+
+## Iterate fxn over df of spp and months -----------------
+purrr::pmap(.l = df, 
+            .f = dist_prob_diff, 
+            ## change model as needed (matches file structure)
+            model = "MIROC85",
+            .progress = TRUE)
+
+```
 
 
 
